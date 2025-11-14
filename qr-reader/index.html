@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self';">
   <title>QRコード読み取りツール</title>
   <meta name="description" content="カメラまたは画像ファイルからQRコードを読み取り、内容を表示するツール">
   <link rel="stylesheet" href="../common.css">
   <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
   <script>
     // FOUC（Flash of Unstyled Content）防止：ページ読み込み前にダークモード適用
     (function() {
@@ -52,10 +53,7 @@
 
     <section id="cameraSection" class="camera-section hidden">
       <h2>カメラプレビュー</h2>
-      <div class="video-container">
-        <video id="video" autoplay playsinline></video>
-        <canvas id="canvas" class="hidden"></canvas>
-      </div>
+      <div id="qr-reader"></div>
       <button id="stopCameraButton" class="danger-button">
         <i class="fas fa-stop"></i> カメラを停止
       </button>

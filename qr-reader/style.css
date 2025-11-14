@@ -87,24 +87,12 @@ section {
   transition: background-color var(--transition-normal), border-color var(--transition-normal);
 }
 
-.video-container {
+#qr-reader {
   width: 100%;
   max-width: 600px;
   margin: 0 auto var(--spacing-lg);
   border-radius: var(--radius-md);
   overflow: hidden;
-  box-shadow: var(--card-shadow);
-  background-color: #000;
-}
-
-#video {
-  width: 100%;
-  height: auto;
-  display: block;
-}
-
-#canvas {
-  display: none;
 }
 
 /* 結果セクション */

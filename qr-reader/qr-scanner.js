@@ -5,6 +5,9 @@
 
 import { initDarkMode } from '../components/dark-mode.js';
 
+// デバッグモード（本番環境では false に設定）
+const DEBUG = false;
+
 // html5-qrcodeライブラリをグローバルスコープから取得
 let Html5Qrcode = null;
 
@@ -17,7 +20,9 @@ async function loadHtml5Qrcode() {
 
   return new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+    script.src = 'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js';
+    script.integrity = 'sha256-ZgsSQ3sddH4+aLi+BoXAjLcoFAEQrSE/FnsUtm+LHY4=';
+    script.crossOrigin = 'anonymous';
     script.onload = () => {
       Html5Qrcode = window.Html5Qrcode;
       resolve();
@@ -32,7 +37,6 @@ const cameraButton = document.getElementById('cameraButton');
 const fileButton = document.getElementById('fileButton');
 const fileInput = document.getElementById('fileInput');
 const cameraSection = document.getElementById('cameraSection');
-const video = document.getElementById('video');
 const stopCameraButton = document.getElementById('stopCameraButton');
 const resultSection = document.getElementById('resultSection');
 const resultText = document.getElementById('resultText');
@@ -64,10 +68,10 @@ function showMessage(text, type = 'success') {
  * @param {string} data - QRコードから読み取ったデータ
  */
 function displayResult(data) {
-  console.log('QRコード読み取り成功:', data);
+  if (DEBUG) console.log('QRコード読み取り成功:', data);
 
   if (!resultText || !resultSection) {
-    console.error('DOM要素が見つかりません');
+    if (DEBUG) console.error('DOM要素が見つかりません');
     showMessage('エラー: 結果表示エリアが見つかりません', 'error');
     return;
   }
@@ -95,8 +99,8 @@ async function startCamera() {
       await loadHtml5Qrcode();
     }
 
-    // インスタンスを作成（video要素のIDを指定）
-    html5QrCode = new Html5Qrcode('video');
+    // インスタンスを作成（div要素のIDを指定）
+    html5QrCode = new Html5Qrcode('qr-reader');
 
     // カメラセクションを表示
     cameraSection.classList.remove('hidden');
@@ -110,7 +114,7 @@ async function startCamera() {
 
     // 成功時のコールバック
     const qrCodeSuccessCallback = (decodedText, decodedResult) => {
-      console.log('QRコード検出:', decodedText);
+      if (DEBUG) console.log('QRコード検出:', decodedText);
       displayResult(decodedText);
       stopCamera();
     };
@@ -129,10 +133,10 @@ async function startCamera() {
     );
 
     isScanning = true;
-    console.log('カメラスキャン開始');
+    if (DEBUG) console.log('カメラスキャン開始');
 
   } catch (error) {
-    console.error('カメラエラー:', error);
+    if (DEBUG) console.error('カメラエラー:', error);
 
     if (error.name === 'NotAllowedError') {
       showMessage('カメラへのアクセスが拒否されました。ブラウザの設定を確認してください。', 'error');
@@ -153,10 +157,10 @@ async function stopCamera() {
   if (html5QrCode && isScanning) {
     try {
       await html5QrCode.stop();
-      console.log('カメラ停止');
+      if (DEBUG) console.log('カメラ停止');
       isScanning = false;
     } catch (error) {
-      console.error('カメラ停止エラー:', error);
+      if (DEBUG) console.error('カメラ停止エラー:', error);
     }
   }
 
@@ -179,19 +183,19 @@ async function scanFromFile(file) {
       await loadHtml5Qrcode();
     }
 
-    // 一時的なインスタンスを作成
+    // インスタンスを作成（ファイルスキャン用）
     if (!html5QrCode) {
-      html5QrCode = new Html5Qrcode('video');
+      html5QrCode = new Html5Qrcode('qr-reader');
     }
 
     // ファイルをスキャン
     const decodedText = await html5QrCode.scanFile(file, true);
 
-    console.log('ファイルからQRコード検出:', decodedText);
+    if (DEBUG) console.log('ファイルからQRコード検出:', decodedText);
     displayResult(decodedText);
 
   } catch (error) {
-    console.error('ファイル読み取りエラー:', error);
+    if (DEBUG) console.error('ファイル読み取りエラー:', error);
 
     if (error.includes && error.includes('QR code parse error')) {
       showMessage('QRコードが見つかりませんでした。別の画像をお試しください。', 'error');
@@ -209,7 +213,7 @@ async function copyToClipboard() {
     await navigator.clipboard.writeText(resultText.textContent);
     showMessage('クリップボードにコピーしました！');
   } catch (error) {
-    console.error('コピーエラー:', error);
+    if (DEBUG) console.error('コピーエラー:', error);
     // フォールバック: 古いブラウザ向け
     const textArea = document.createElement('textarea');
     textArea.value = resultText.textContent;
@@ -245,14 +249,14 @@ window.addEventListener('beforeunload', async () => {
 
 // 初期化処理
 (async function init() {
-  console.log('QRコード読み取りツール初期化開始');
+  if (DEBUG) console.log('QRコード読み取りツール初期化開始');
 
   // html5-qrcodeライブラリを事前に読み込み
   try {
     await loadHtml5Qrcode();
-    console.log('html5-qrcodeライブラリを読み込みました:', Html5Qrcode);
+    if (DEBUG) console.log('html5-qrcodeライブラリを読み込みました:', Html5Qrcode);
   } catch (error) {
-    console.error('html5-qrcodeライブラリの読み込みエラー:', error);
+    if (DEBUG) console.error('html5-qrcodeライブラリの読み込みエラー:', error);
     if (message) {
       showMessage('QRコード読み取りライブラリの読み込みに失敗しました', 'error');
     }
@@ -261,10 +265,10 @@ window.addEventListener('beforeunload', async () => {
   // ダークモード初期化
   try {
     initDarkMode('toggleDarkMode');
-    console.log('ダークモード初期化完了');
+    if (DEBUG) console.log('ダークモード初期化完了');
   } catch (error) {
-    console.error('ダークモード初期化エラー:', error);
+    if (DEBUG) console.error('ダークモード初期化エラー:', error);
   }
 
-  console.log('初期化処理完了');
+  if (DEBUG) console.log('初期化処理完了');
 })();
