@@ -2,7 +2,7 @@
 
 動画編集や画像処理に役立つウェブツール集。すべてのツールはブラウザ上で動作し、プライバシーを保護します。
 
-🔗 **デモサイト**: [https://your-site-url.pages.dev](https://your-site-url.pages.dev)
+🔗 **デモサイト**: [https://tool.leciel.site](https://tool.leciel.site)
 
 ## 📋 目次
 
@@ -19,6 +19,7 @@
 
 - 🎬 **YouTubeチャプター変換ツール** - 編集ソフトのマーカーをYouTubeチャプター形式に変換
 - 🖼️ **画像メタデータ削除ツール** - PNG/JPEG画像からEXIF等のメタデータを完全削除
+- 📱 **QRコード読み取りツール** - カメラまたは画像ファイルからQRコードを読み取り
 - 🌙 **ダークモード対応** - システム設定に連動、設定を保存
 - 📱 **レスポンシブデザイン** - モバイル・タブレット・デスクトップに対応
 - 🔒 **完全プライバシー保護** - すべての処理はブラウザ内で完結
@@ -67,6 +68,25 @@ PNG・JPEG画像から位置情報、撮影日時、カメラ情報などのメ�
 
 **詳細:** [metadata-remover/](metadata-remover/)
 
+### 3. QRコード読み取りツール
+
+カメラまたは画像ファイルからQRコードを読み取り、内容を平文で表示します。
+
+**主な機能:**
+- 📷 カメラでリアルタイムスキャン
+- 🖼️ 画像ファイルから読み取り（PNG、JPEG、WebP等）
+- 📋 結果のクリップボードコピー
+- 🔒 完全ローカル処理（サーバー送信なし）
+- 🔐 セキュリティ強化（SRI、CSP対応）
+
+**技術的特徴:**
+- html5-qrcodeライブラリ使用（jsDelivr CDN経由）
+- Subresource Integrity（SRI）でCDN改ざん防止
+- Content Security Policy（CSP）でXSS攻撃防止
+- DEBUGモード搭載（本番環境でログ無効化）
+
+**詳細:** [qr-reader/](qr-reader/)
+
 ## 🚀 使い方
 
 ### オンライン利用
@@ -77,23 +97,11 @@ PNG・JPEG画像から位置情報、撮影日時、カメラ情報などのメ�
 
 1. リポジトリをクローン:
 ```bash
-git clone https://github.com/yourusername/edlParser.git
-cd edlParser
+git clone https://github.com/yourusername/leciel-Toolkit.git
+cd leciel-Toolkit
 ```
 
-2. ブラウザでHTMLファイルを開く:
-```bash
-# ホームページ
-open index.html
-
-# YouTubeチャプター変換ツール
-open app/index.html
-
-# 画像メタデータ削除ツール
-open metadata-remover/index.html
-```
-
-または、ローカルサーバーを起動:
+1. ローカルサーバーを起動:
 ```bash
 # Python 3
 python -m http.server 8000
@@ -112,6 +120,14 @@ npx http-server
 - **JavaScript (ES6+)** - Modules、async/await
 - **Font Awesome** - アイコン
 
+### 外部ライブラリ
+- **html5-qrcode** - QRコード読み取り（jsDelivr CDN経由、v2.3.8）
+
+### セキュリティ
+- **SRI (Subresource Integrity)** - CDNリソースの改ざん防止
+- **CSP (Content Security Policy)** - XSS攻撃・データ漏洩防止
+- **完全クライアントサイド処理** - サーバーへのデータ送信なし
+
 ### アーキテクチャ
 - **モジュール構成** - 機能ごとに分割された再利用可能なモジュール
 - **コンポーネント指向** - 共通UIコンポーネント
@@ -126,7 +142,7 @@ npx http-server
 ### ディレクトリ構造
 
 ```
-edlParser/
+leciel-Toolkit/
 ├── index.html              # ホームページ
 ├── common.css              # 共通スタイル
 ├── home.css                # ホームページ専用スタイル
@@ -145,30 +161,16 @@ edlParser/
 │   ├── index.html
 │   ├── client-processor.js # クライアント処理
 │   └── style.css
+├── qr-reader/              # QRコード読み取りツール
+│   ├── index.html
+│   ├── qr-scanner.js      # QRスキャナー処理
+│   └── style.css
 ├── components/             # 共通コンポーネント
 │   └── dark-mode.js       # ダークモード機能
 └── functions/              # Cloudflare Functions (オプション)
     └── api/
         └── remove-metadata.js
 ```
-
-### 開発ガイドライン
-
-#### コーディング規約
-- ES6 Modules使用
-- 関数はJSDocでドキュメント化
-- セレクタはBEM命名規則を推奨
-- CSS Variablesで色・サイズ管理
-
-#### モジュール追加
-1. `app/utils/`または`app/ui/`に新しいモジュールを作成
-2. `export`でAPIを公開
-3. `main.js`で`import`
-
-#### スタイル追加
-1. 共通スタイルは`common.css`に
-2. ページ固有スタイルは各ディレクトリの`style.css`に
-3. CSS Variablesを活用
 
 ## 🌐 デプロイ
 
@@ -182,12 +184,6 @@ edlParser/
    - **ルートディレクトリ:** `/`
 
 4. デプロイ完了後、カスタムドメイン設定（オプション）
-
-### その他のホスティング
-
-- **Netlify**: ドラッグ&ドロップでデプロイ
-- **Vercel**: GitHub連携で自動デプロイ
-- **GitHub Pages**: 静的サイトとして公開
 
 ## 🔒 プライバシー
 
@@ -210,8 +206,5 @@ edlParser/
 
 - [Font Awesome](https://fontawesome.com/) - アイコン提供
 - [Cloudflare Pages](https://pages.cloudflare.com/) - ホスティング
-- すべてのコントリビューター
 
 ---
-
-⭐ このプロジェクトが役に立った場合は、スターをお願いします！
