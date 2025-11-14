@@ -1,12 +1,31 @@
 /**
  * QRコード読み取りツール
- * jsQRライブラリを使用してクライアントサイドでQRコードを読み取る
+ * html5-qrcodeライブラリを使用してクライアントサイドでQRコードを読み取る
  */
 
 import { initDarkMode } from '../components/dark-mode.js';
 
-// jsQRライブラリを動的にインポート
-const jsQR = await import('https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js').then(module => module.default);
+// html5-qrcodeライブラリをグローバルスコープから取得
+let Html5Qrcode = null;
+
+// html5-qrcodeライブラリを動的にロード
+async function loadHtml5Qrcode() {
+  if (window.Html5Qrcode) {
+    Html5Qrcode = window.Html5Qrcode;
+    return;
+  }
+
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+    script.onload = () => {
+      Html5Qrcode = window.Html5Qrcode;
+      resolve();
+    };
+    script.onerror = () => reject(new Error('html5-qrcodeライブラリの読み込みに失敗しました'));
+    document.head.appendChild(script);
+  });
+}
 
 // DOM要素
 const cameraButton = document.getElementById('cameraButton');
@@ -14,15 +33,15 @@ const fileButton = document.getElementById('fileButton');
 const fileInput = document.getElementById('fileInput');
 const cameraSection = document.getElementById('cameraSection');
 const video = document.getElementById('video');
-const canvas = document.getElementById('canvas');
 const stopCameraButton = document.getElementById('stopCameraButton');
 const resultSection = document.getElementById('resultSection');
 const resultText = document.getElementById('resultText');
 const copyButton = document.getElementById('copyButton');
 const message = document.getElementById('message');
 
-let stream = null;
-let scanningInterval = null;
+// html5-qrcodeインスタンス
+let html5QrCode = null;
+let isScanning = false;
 
 /**
  * メッセージを表示
@@ -45,8 +64,24 @@ function showMessage(text, type = 'success') {
  * @param {string} data - QRコードから読み取ったデータ
  */
 function displayResult(data) {
-  resultText.textContent = data;
+  console.log('QRコード読み取り成功:', data);
+
+  if (!resultText || !resultSection) {
+    console.error('DOM要素が見つかりません');
+    showMessage('エラー: 結果表示エリアが見つかりません', 'error');
+    return;
+  }
+
+  // 結果テキストを設定
+  resultText.textContent = data || '(空のデータ)';
+
+  // hiddenクラスを削除して表示
   resultSection.classList.remove('hidden');
+  resultSection.style.display = 'block';
+
+  // 結果セクションにスクロール
+  resultSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
   showMessage('QRコードを読み取りました！');
 }
 
@@ -55,26 +90,50 @@ function displayResult(data) {
  */
 async function startCamera() {
   try {
-    // カメラアクセスを要求
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment' } // 背面カメラを優先
-    });
+    // html5-qrcodeライブラリを読み込み
+    if (!Html5Qrcode) {
+      await loadHtml5Qrcode();
+    }
 
-    video.srcObject = stream;
-    video.setAttribute('playsinline', true);
-    video.play();
+    // インスタンスを作成（video要素のIDを指定）
+    html5QrCode = new Html5Qrcode('video');
 
+    // カメラセクションを表示
     cameraSection.classList.remove('hidden');
 
-    // ビデオの準備ができたらスキャンを開始
-    video.addEventListener('loadedmetadata', () => {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      startScanning();
-    });
+    // カメラを起動
+    const config = {
+      fps: 10,    // 1秒間に10フレームスキャン
+      qrbox: { width: 250, height: 250 },  // スキャンボックスのサイズ
+      aspectRatio: 1.777778  // 16:9
+    };
+
+    // 成功時のコールバック
+    const qrCodeSuccessCallback = (decodedText, decodedResult) => {
+      console.log('QRコード検出:', decodedText);
+      displayResult(decodedText);
+      stopCamera();
+    };
+
+    // エラー時のコールバック（検出できない場合は頻繁に呼ばれるので無視）
+    const qrCodeErrorCallback = (errorMessage) => {
+      // スキャン中のエラーは無視（QRコードが見つからない状態）
+    };
+
+    // 背面カメラを優先して起動
+    await html5QrCode.start(
+      { facingMode: 'environment' },
+      config,
+      qrCodeSuccessCallback,
+      qrCodeErrorCallback
+    );
+
+    isScanning = true;
+    console.log('カメラスキャン開始');
 
   } catch (error) {
     console.error('カメラエラー:', error);
+
     if (error.name === 'NotAllowedError') {
       showMessage('カメラへのアクセスが拒否されました。ブラウザの設定を確認してください。', 'error');
     } else if (error.name === 'NotFoundError') {
@@ -82,48 +141,26 @@ async function startCamera() {
     } else {
       showMessage(`カメラの起動に失敗しました: ${error.message}`, 'error');
     }
+
+    cameraSection.classList.add('hidden');
   }
 }
 
 /**
  * カメラを停止
  */
-function stopCamera() {
-  if (stream) {
-    stream.getTracks().forEach(track => track.stop());
-    stream = null;
-  }
-
-  if (scanningInterval) {
-    clearInterval(scanningInterval);
-    scanningInterval = null;
-  }
-
-  video.srcObject = null;
-  cameraSection.classList.add('hidden');
-}
-
-/**
- * QRコードスキャンを開始
- */
-function startScanning() {
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-
-  scanningInterval = setInterval(() => {
-    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const code = jsQR(imageData.data, imageData.width, imageData.height);
-
-      if (code) {
-        displayResult(code.data);
-        stopCamera();
-      }
+async function stopCamera() {
+  if (html5QrCode && isScanning) {
+    try {
+      await html5QrCode.stop();
+      console.log('カメラ停止');
+      isScanning = false;
+    } catch (error) {
+      console.error('カメラ停止エラー:', error);
     }
-  }, 300); // 300msごとにスキャン
+  }
+
+  cameraSection.classList.add('hidden');
 }
 
 /**
@@ -137,34 +174,30 @@ async function scanFromFile(file) {
   }
 
   try {
-    const img = new Image();
-    const reader = new FileReader();
+    // html5-qrcodeライブラリを読み込み
+    if (!Html5Qrcode) {
+      await loadHtml5Qrcode();
+    }
 
-    reader.onload = (e) => {
-      img.onload = () => {
-        canvas.width = img.width;
-        canvas.height = img.height;
+    // 一時的なインスタンスを作成
+    if (!html5QrCode) {
+      html5QrCode = new Html5Qrcode('video');
+    }
 
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        ctx.drawImage(img, 0, 0);
+    // ファイルをスキャン
+    const decodedText = await html5QrCode.scanFile(file, true);
 
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height);
+    console.log('ファイルからQRコード検出:', decodedText);
+    displayResult(decodedText);
 
-        if (code) {
-          displayResult(code.data);
-        } else {
-          showMessage('QRコードが見つかりませんでした。別の画像をお試しください。', 'error');
-        }
-      };
-
-      img.src = e.target.result;
-    };
-
-    reader.readAsDataURL(file);
   } catch (error) {
     console.error('ファイル読み取りエラー:', error);
-    showMessage(`ファイルの読み取りに失敗しました: ${error.message}`, 'error');
+
+    if (error.includes && error.includes('QR code parse error')) {
+      showMessage('QRコードが見つかりませんでした。別の画像をお試しください。', 'error');
+    } else {
+      showMessage(`ファイルの読み取りに失敗しました: ${error}`, 'error');
+    }
   }
 }
 
@@ -206,9 +239,32 @@ stopCameraButton.addEventListener('click', stopCamera);
 copyButton.addEventListener('click', copyToClipboard);
 
 // ページを離れる前にカメラを停止
-window.addEventListener('beforeunload', () => {
-  stopCamera();
+window.addEventListener('beforeunload', async () => {
+  await stopCamera();
 });
 
-// ダークモード初期化
-initDarkMode('toggleDarkMode');
+// 初期化処理
+(async function init() {
+  console.log('QRコード読み取りツール初期化開始');
+
+  // html5-qrcodeライブラリを事前に読み込み
+  try {
+    await loadHtml5Qrcode();
+    console.log('html5-qrcodeライブラリを読み込みました:', Html5Qrcode);
+  } catch (error) {
+    console.error('html5-qrcodeライブラリの読み込みエラー:', error);
+    if (message) {
+      showMessage('QRコード読み取りライブラリの読み込みに失敗しました', 'error');
+    }
+  }
+
+  // ダークモード初期化
+  try {
+    initDarkMode('toggleDarkMode');
+    console.log('ダークモード初期化完了');
+  } catch (error) {
+    console.error('ダークモード初期化エラー:', error);
+  }
+
+  console.log('初期化処理完了');
+})();
