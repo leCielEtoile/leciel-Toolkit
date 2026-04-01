@@ -1,0 +1,26 @@
+---
+import ToolLayout from '@/layouts/ToolLayout.astro'
+import QrReader from '@/components/QrReader.svelte'
+import ToolInfo from '@/components/ToolInfo.astro'
+---
+
+<ToolLayout
+  title="QRコード読み取りツール"
+  description="カメラまたは画像ファイルからQRコードを読み取り、内容を表示するツール"
+>
+  <QrReader client:load />
+
+  <ToolInfo
+    features={[
+      'カメラをリアルタイムでスキャンしてQRコードを読み取り',
+      '画像ファイル（JPEG・PNG・GIF・WebP）からQRコードを読み取り',
+      '読み取り結果のテキストをワンクリックでクリップボードにコピー',
+      'URLが含まれる場合はリンクとして開くことが可能',
+    ]}
+    steps={[
+      '「カメラで読み取る」タブを選んでカメラを起動し、QRコードにかざします。または「画像から読み取る」タブでファイルを選択します。',
+      'QRコードが認識されると、読み取り結果が自動的に表示されます。',
+      '結果テキストの「コピー」ボタンでクリップボードに保存します。URLの場合はそのままリンクを開けます。',
+    ]}
+  />
+</ToolLayout>

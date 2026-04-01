@@ -1,0 +1,4 @@
+/app/*              /tools/chapter-converter  301
+/metadata-remover/* /tools/metadata-remover   301
+/qr-reader/*        /tools/qr-reader          301
+/image-converter/*  /tools/image-converter    301

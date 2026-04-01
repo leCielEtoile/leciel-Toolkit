@@ -1,0 +1,95 @@
+---
+import '@/styles/global.css'
+import Header from '@/components/Header.svelte'
+
+const tools = [
+  {
+    href: '/tools/chapter-converter',
+    icon: 'fas fa-video',
+    title: 'YouTubeチャプター変換ツール',
+    description: 'PremierePro・DaVinci Resolveのマーカーをユーチューブチャプター形式に変換',
+  },
+  {
+    href: '/tools/metadata-remover',
+    icon: 'fas fa-image',
+    title: '画像メタデータ削除ツール',
+    description: 'PNG・JPEG画像からEXIF、位置情報などのメタデータを完全に削除',
+  },
+  {
+    href: '/tools/qr-reader',
+    icon: 'fas fa-qrcode',
+    title: 'QRコード読み取りツール',
+    description: 'カメラまたは画像ファイルからQRコードを読み取り、内容を表示',
+  },
+  {
+    href: '/tools/image-converter',
+    icon: 'fas fa-exchange-alt',
+    title: '画像変換ツール',
+    description: 'JPEG・PNG・WebP・AVIFなど複数フォーマット間で画像を変換',
+  },
+]
+---
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>leciel ToolKit</title>
+  <meta name="description" content="ブラウザツール集。すべてのツールはブラウザ上で動作しサーバーに情報が保存されません。" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" />
+  <script is:inline>
+    (function () {
+      const stored = localStorage.getItem('darkMode')
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+      if (stored === 'enabled' || (!stored && systemDark)) {
+        document.documentElement.classList.add('dark')
+      }
+    })()
+  </script>
+</head>
+<body class="flex flex-col min-h-screen bg-[var(--background)] text-[var(--text)]">
+
+  <Header title="leciel ToolKit" showHome={false} client:load />
+
+  <main class="flex-1 w-full max-w-2xl mx-auto px-4 sm:px-6 pt-10 pb-16 flex flex-col gap-10">
+
+    <!-- ヒーロー -->
+    <section class="flex flex-col items-center text-center gap-2 pt-4">
+      <h2 class="text-3xl font-bold gradient-text select-none">leciel ToolKit</h2>
+      <p class="text-sm text-[var(--text-muted)]">ブラウザツール集<br>すべてのツールはブラウザ上で動作しサーバーに情報が保存されません</p>
+    </section>
+
+    <!-- ツール一覧 -->
+    <section class="w-full">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="w-1 h-5 rounded-full bg-[var(--color-primary)]"></span>
+        <h2 class="section-heading">ツール一覧</h2>
+      </div>
+      <div class="flex flex-col gap-2.5">
+        {tools.map((tool) => (
+          <a
+            href={tool.href}
+            class="group flex items-center gap-4 p-4 rounded-2xl border border-[var(--outline-variant)] bg-[var(--surface-container)] shadow-[var(--elev-1)] text-[var(--on-surface)] no-underline transition-all duration-200 hover:shadow-[var(--elev-3)] hover:-translate-y-0.5 hover:border-[var(--color-primary)]"
+          >
+            <div class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-[var(--color-primary-light)]">
+              <i class={`${tool.icon} text-xl text-[var(--color-primary)]`}></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <h3 class="text-sm font-semibold mb-0.5">{tool.title}</h3>
+              <p class="text-xs text-[var(--text-muted)] leading-relaxed line-clamp-2">{tool.description}</p>
+            </div>
+            <i class="fas fa-chevron-right text-xs text-[var(--text-muted)] flex-shrink-0 transition-all duration-200 group-hover:translate-x-1 group-hover:text-[var(--color-primary)]"></i>
+          </a>
+        ))}
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="w-full py-4 text-center text-sm text-[var(--text-muted)] bg-[var(--surface-variant)] border-t border-[var(--outline-variant)] transition-colors duration-300">
+    <p>&copy; 2026 leciel ToolKit</p>
+  </footer>
+
+</body>
+</html>

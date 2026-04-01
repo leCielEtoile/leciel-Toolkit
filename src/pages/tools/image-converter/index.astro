@@ -1,0 +1,38 @@
+---
+import ToolLayout from '@/layouts/ToolLayout.astro'
+import ImageConverter from '@/components/ImageConverter.svelte'
+import ToolInfo from '@/components/ToolInfo.astro'
+---
+
+<ToolLayout
+  title="画像変換ツール"
+  description="JPEG・PNG・WebP・AVIF など複数フォーマット間で画像を変換するツール"
+>
+  <!-- coi-serviceworker: enables SharedArrayBuffer for wasm-vips without server headers -->
+  <script is:inline>
+    if ('serviceWorker' in navigator && !crossOriginIsolated) {
+      navigator.serviceWorker
+        .register('/coi-serviceworker.js', { scope: '/tools/image-converter/' })
+        .then(() => window.location.reload())
+    }
+  </script>
+
+  <ImageConverter client:load />
+
+  <ToolInfo
+    features={[
+      'JPEG・PNG・WebP・AVIF・TIFF・GIF・SVG・BMP など主要フォーマット間で相互変換',
+      '品質・圧縮レベル・ロスレスモードなど各フォーマット固有の詳細設定が可能',
+      '幅・高さ・収める・カバーの4モードでリサイズ',
+      'EXIF などのメタデータを変換時に削除するオプション',
+      '複数ファイルを一括変換してまとめてダウンロード',
+      '変換設定をプリセットとして保存・呼び出しが可能',
+    ]}
+    steps={[
+      '変換したい画像をドロップゾーンにドラッグ＆ドロップ、またはクリックして選択します。',
+      '出力フォーマットを選択し、必要に応じて品質・リサイズ・メタデータ削除などを設定します。よく使う設定はプリセットに保存できます。',
+      '「一括変換」ボタンを押すと変換が開始されます（初回のみ WebAssembly ライブラリの読み込みが発生します）。',
+      '変換完了後、各ファイルのダウンロードボタンから個別に保存するか、「全 DL」でまとめて保存します。',
+    ]}
+  />
+</ToolLayout>

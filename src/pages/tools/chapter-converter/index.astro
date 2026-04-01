@@ -1,0 +1,29 @@
+---
+import ToolLayout from '@/layouts/ToolLayout.astro'
+import ChapterConverter from '@/components/ChapterConverter.svelte'
+import ToolInfo from '@/components/ToolInfo.astro'
+---
+
+<ToolLayout
+  title="YouTubeチャプター変換ツール"
+  description="PremierePro・DaVinci Resolveのマーカーをユーチューブチャプター形式に変換するツール"
+>
+  <ChapterConverter client:load />
+
+  <ToolInfo
+    features={[
+      'PremierePro のマーカーファイル（.csv）をYouTubeチャプター形式に変換',
+      'DaVinci Resolve の EDL・タイムラインマーカーをYouTubeチャプター形式に変換',
+      'チャプターの時間・タイトルを手動で追加・編集・削除',
+      '最初のチャプターを 00:00:00 開始に自動補正',
+      '変換済みチャプターをテキストファイルでダウンロード、またはクリップボードにコピー',
+    ]}
+    steps={[
+      'マーカーファイル（CSV / EDL）をドロップゾーンにドラッグ＆ドロップ、またはクリックして選択します。',
+      'または、マーカーテキストを直接テキストエリアに貼り付けて「変換」ボタンを押します。',
+      '変換されたチャプターが下のエディタに表示されます。必要に応じて時間・タイトルを編集します。',
+      '「00:00:00開始に補正」ボタンで最初のチャプターを0秒に合わせます。',
+      '「ダウンロード」または「クリップボードにコピー」でチャプターテキストを取得し、YouTubeの説明欄に貼り付けます。',
+    ]}
+  />
+</ToolLayout>

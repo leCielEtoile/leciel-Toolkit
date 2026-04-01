@@ -1,0 +1,46 @@
+---
+interface Props {
+  features: string[]
+  steps: string[]
+}
+
+const { features, steps } = Astro.props
+---
+
+<section class="flex flex-col gap-8 border-t border-[var(--outline-variant)] pt-10">
+
+  <!-- できること -->
+  <div>
+    <div class="flex items-center gap-3 mb-4">
+      <span class="w-1 h-5 rounded-full bg-[var(--color-primary)]"></span>
+      <h2 class="section-heading">できること</h2>
+    </div>
+    <ul class="flex flex-col gap-2">
+      {features.map((f) => (
+        <li class="flex items-start gap-2.5 text-sm text-[var(--text)]">
+          <i class="fas fa-check text-[var(--color-primary)] mt-0.5 shrink-0 text-xs"></i>
+          <span>{f}</span>
+        </li>
+      ))}
+    </ul>
+  </div>
+
+  <!-- 使い方 -->
+  <div>
+    <div class="flex items-center gap-3 mb-4">
+      <span class="w-1 h-5 rounded-full bg-[var(--color-primary)]"></span>
+      <h2 class="section-heading">使い方</h2>
+    </div>
+    <ol class="flex flex-col gap-3">
+      {steps.map((step, i) => (
+        <li class="flex items-start gap-3 text-sm text-[var(--text)]">
+          <span class="shrink-0 w-5 h-5 rounded-full bg-[var(--color-primary)] text-white text-[10px] font-bold flex items-center justify-center mt-0.5">
+            {i + 1}
+          </span>
+          <span class="leading-relaxed">{step}</span>
+        </li>
+      ))}
+    </ol>
+  </div>
+
+</section>
