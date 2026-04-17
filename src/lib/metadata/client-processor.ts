@@ -87,5 +87,5 @@ export async function processImage(file: File): Promise<{ blob: Blob; mimeType: 
     throw new Error('PNG または JPEG 形式のファイルを使用してください')
   }
 
-  return { blob: new Blob([cleanedData], { type: mimeType }), mimeType }
+  return { blob: new Blob([cleanedData.buffer as ArrayBuffer], { type: mimeType }), mimeType }
 }

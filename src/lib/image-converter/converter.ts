@@ -20,7 +20,7 @@ export interface ConvertOptions {
 
   // WebP 専用
   webpLossless: boolean
-  webpMethod: number           // 0 (速い) – 6 (高品質)
+  webpEffort: number           // 0 (速い) – 6 (高品質)
 
   // AVIF 専用
   avifLossless: boolean
@@ -53,7 +53,7 @@ export const DEFAULT_OPTIONS: ConvertOptions = {
   jpegProgressive: false,
   jpegSubsample: 'auto',
   webpLossless: false,
-  webpMethod: 4,
+  webpEffort: 4,
   avifLossless: false,
   avifSpeed: 5,
   tiffCompression: 'lzw',
@@ -192,9 +192,9 @@ export async function convertImage(file: File, opts: ConvertOptions): Promise<Co
       }
       case 'webp': {
         if (opts.webpLossless) {
-          outBuffer = img.webpsaveBuffer({ lossless: true, method: opts.webpMethod, strip })
+          outBuffer = img.webpsaveBuffer({ lossless: true, effort: opts.webpEffort, strip })
         } else {
-          outBuffer = img.webpsaveBuffer({ Q: q, method: opts.webpMethod, strip })
+          outBuffer = img.webpsaveBuffer({ Q: q, effort: opts.webpEffort, strip })
         }
         break
       }
@@ -228,7 +228,7 @@ export async function convertImage(file: File, opts: ConvertOptions): Promise<Co
       tiff: 'image/tiff',
     }
 
-    const blob = new Blob([outBuffer], { type: mimeMap[opts.format] })
+    const blob = new Blob([outBuffer.buffer as ArrayBuffer], { type: mimeMap[opts.format] })
     const baseName = file.name.replace(/\.[^.]+$/, '')
     const ext = opts.format === 'jpeg' ? 'jpg' : opts.format
     const filename = `${baseName}.${ext}`

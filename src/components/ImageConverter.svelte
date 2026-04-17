@@ -65,15 +65,15 @@
   const BUILT_IN_PRESETS: { name: string; opts: Partial<ConvertOptions> }[] = [
     {
       name: '高品質',
-      opts: { format: 'webp', quality: 95, webpLossless: false, webpMethod: 6, stripMetadata: false },
+      opts: { format: 'webp', quality: 95, webpLossless: false, webpEffort: 6, stripMetadata: false },
     },
     {
       name: '効率重視',
-      opts: { format: 'webp', quality: 65, webpLossless: false, webpMethod: 2, stripMetadata: true },
+      opts: { format: 'webp', quality: 65, webpLossless: false, webpEffort: 2, stripMetadata: true },
     },
     {
       name: 'ロスレス',
-      opts: { format: 'webp', quality: 100, webpLossless: true, webpMethod: 6, stripMetadata: false },
+      opts: { format: 'webp', quality: 100, webpLossless: true, webpEffort: 6, stripMetadata: false },
     },
     {
       name: 'Web 最適化',
@@ -414,10 +414,10 @@
             <div>
               <label class="flex items-center justify-between text-xs font-medium text-[var(--text-muted)] mb-2">
                 <span>エンコード品質 (Method)</span>
-                <span class="font-mono text-[var(--color-primary)] text-sm">{opts.webpMethod}</span>
+                <span class="font-mono text-[var(--color-primary)] text-sm">{opts.webpEffort}</span>
               </label>
               <input type="range" min="0" max="6" step="1"
-                bind:value={opts.webpMethod}
+                bind:value={opts.webpEffort}
                 class="w-full accent-[var(--color-primary)]"
               />
               <div class="flex justify-between text-[10px] text-[var(--text-muted)] mt-0.5">
