@@ -423,7 +423,7 @@
     </button>
 
     <!-- Page display -->
-    <div class="flex flex-col items-center gap-3 max-h-full">
+    <div class="flex flex-col items-center gap-2 max-h-full">
       <!-- Header -->
       <div class="flex items-center gap-4 text-white">
         <span class="text-sm font-mono opacity-80">{previewIndex + 1} / {pageCount}</span>
@@ -437,27 +437,25 @@
       </div>
 
       <!-- Page (zoom + pan) -->
+      <!-- svelte-ignore a11y_no_noninteractive_element_interactions a11y_no_noninteractive_tabindex -->
       <div
-        class="rounded-xl shadow-(--elev-3) overflow-hidden select-none"
-        style="width: min(68vw, 420px);"
+        class="rounded-xl shadow-(--elev-3) overflow-hidden select-none relative
+               {zoom > 1 ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default'}"
+        style="height: min(60svh, 460px); aspect-ratio: 210/297;"
         onwheel={onWheelZoom}
+        onmousedown={onPanStart}
+        onmousemove={onPanMove}
+        onmouseup={onPanEnd}
+        onmouseleave={onPanEnd}
+        role="application"
+        tabindex={0}
+        aria-label="ページプレビュー（ドラッグでパン）"
       >
         <div
-          class="aspect-210/297 relative overflow-hidden
-                 {zoom > 1 ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default'}"
-          onmousedown={onPanStart}
-          onmousemove={onPanMove}
-          onmouseup={onPanEnd}
-          onmouseleave={onPanEnd}
-          role="application"
-          aria-label="ページプレビュー（ドラッグでパン）"
+          class="absolute inset-0 origin-center"
+          style="transform: scale({zoom}) translate({panX}px, {panY}px); will-change: transform;"
         >
-          <div
-            class="absolute inset-0 origin-center"
-            style="transform: scale({zoom}) translate({panX}px, {panY}px); will-change: transform;"
-          >
-            {@render thumb(page.id, page.rotation)}
-          </div>
+          {@render thumb(page.id, page.rotation)}
         </div>
       </div>
 
