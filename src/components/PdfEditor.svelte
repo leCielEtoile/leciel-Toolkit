@@ -88,10 +88,11 @@
   // ─── Preview ────────────────────────────────────────────────────────────
   let previewIndex = $state<number | null>(null)
   let zoom         = $state(1.0)
-  let overlayEl    = $state<HTMLDivElement | null>(null)
-  let isDragging   = $state(false)
-  let hasDragged   = false
-  let dragStart    = { x: 0, y: 0, scrollLeft: 0, scrollTop: 0 }
+  let overlayEl     = $state<HTMLDivElement | null>(null)
+  let isDragging    = $state(false)
+  let showControls  = $state(false)
+  let hasDragged    = false
+  let dragStart     = { x: 0, y: 0, scrollLeft: 0, scrollTop: 0 }
 
   const ZOOM_MIN  = 0.5
   const ZOOM_MAX  = 3.0
@@ -136,6 +137,11 @@
   function onOverlayMouseup(e: MouseEvent) {
     isDragging = false
     if (!hasDragged && e.target === overlayEl) closePreview()
+  }
+
+  function onOverlayMouseleave() {
+    isDragging    = false
+    showControls  = false
   }
 
   function onPreviewKeydown(e: KeyboardEvent) {
@@ -408,10 +414,11 @@
     bind:this={overlayEl}
     class="fixed inset-0 bg-black/70 overflow-auto z-50
            {isDragging ? 'cursor-grabbing' : zoom > 1 ? 'cursor-grab' : 'cursor-default'}"
+    onmouseenter={() => showControls = true}
     onmousedown={onOverlayMousedown}
     onmousemove={onOverlayMousemove}
     onmouseup={onOverlayMouseup}
-    onmouseleave={onOverlayMouseup}
+    onmouseleave={onOverlayMouseleave}
     onkeydown={onPreviewKeydown}
     role="dialog"
     aria-modal="true"
@@ -452,8 +459,14 @@
         </div>
       </div>
 
-      <!-- Zoom controls -->
-      <div class="flex items-center gap-1 bg-black/30 rounded-full px-3 py-1.5">
+    </div>
+
+    <!-- Zoom controls (fixed at bottom, shown on hover) -->
+    <div
+      class="fixed bottom-6 left-1/2 -translate-x-1/2 z-60 flex flex-col items-center gap-1.5 transition-opacity duration-200
+             {showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}"
+    >
+      <div class="flex items-center gap-1 bg-black/60 rounded-full px-3 py-1.5 backdrop-blur-sm">
         <button
           class="w-7 h-7 rounded-full flex items-center justify-center text-white hover:bg-white/20 transition-colors disabled:opacity-30"
           onclick={zoomOut}
@@ -478,11 +491,7 @@
           <i class="fas fa-plus text-xs"></i>
         </button>
       </div>
-
-      <!-- Keyboard hint -->
-      <p class="text-white/40 text-xs">
-        ← → ページ移動　± ズーム　0 でリセット　ドラッグで移動　Esc で閉じる
-      </p>
+      <p class="text-white/40 text-xs">← → ページ移動　± ズーム　0 でリセット　ドラッグで移動　Esc で閉じる</p>
     </div>
 
     <!-- Next button -->
