@@ -25,6 +25,7 @@ yarn.lock
 dist/
 build/
 .cache/
+.astro/
 
 # Temporary files
 *.tmp
