@@ -88,16 +88,12 @@
   // ─── Preview ────────────────────────────────────────────────────────────
   let previewIndex = $state<number | null>(null)
   let zoom         = $state(1.0)
-  let panX         = $state(0)
-  let panY         = $state(0)
-  let isPanning    = $state(false)
-  let panStart     = { x: 0, y: 0, panX: 0, panY: 0 }
 
   const ZOOM_MIN  = 0.5
   const ZOOM_MAX  = 3.0
   const ZOOM_STEP = 0.25
 
-  function resetView() { zoom = 1.0; panX = 0; panY = 0 }
+  function resetView() { zoom = 1.0 }
 
   function openPreview(i: number) { previewIndex = i; resetView() }
   function closePreview()         { previewIndex = null }
@@ -111,39 +107,21 @@
   }
 
   function zoomIn()  { zoom = Math.min(ZOOM_MAX, +(zoom + ZOOM_STEP).toFixed(2)) }
-  function zoomOut() {
-    zoom = Math.max(ZOOM_MIN, +(zoom - ZOOM_STEP).toFixed(2))
-    if (zoom <= 1.0) { panX = 0; panY = 0 }
-  }
+  function zoomOut() { zoom = Math.max(ZOOM_MIN, +(zoom - ZOOM_STEP).toFixed(2)) }
 
   function onWheelZoom(e: WheelEvent) {
     e.preventDefault()
     const delta = e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP
     zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, +(zoom + delta).toFixed(2)))
-    if (zoom <= 1.0) { panX = 0; panY = 0 }
   }
-
-  function onPanStart(e: MouseEvent) {
-    if (zoom <= 1.0) return
-    isPanning = true
-    panStart  = { x: e.clientX, y: e.clientY, panX, panY }
-  }
-
-  function onPanMove(e: MouseEvent) {
-    if (!isPanning) return
-    panX = panStart.panX + (e.clientX - panStart.x) / zoom
-    panY = panStart.panY + (e.clientY - panStart.y) / zoom
-  }
-
-  function onPanEnd() { isPanning = false }
 
   function onPreviewKeydown(e: KeyboardEvent) {
-    if      (e.key === 'Escape')                    closePreview()
-    else if (e.key === '+' || e.key === '=')         zoomIn()
-    else if (e.key === '-')                          zoomOut()
-    else if (e.key === '0')                          resetView()
-    else if (e.key === 'ArrowLeft'  && zoom === 1.0) prevPage()
-    else if (e.key === 'ArrowRight' && zoom === 1.0) nextPage()
+    if      (e.key === 'Escape')              closePreview()
+    else if (e.key === '+' || e.key === '=')  zoomIn()
+    else if (e.key === '-')                   zoomOut()
+    else if (e.key === '0')                   resetView()
+    else if (e.key === 'ArrowLeft')           prevPage()
+    else if (e.key === 'ArrowRight')          nextPage()
   }
 </script>
 
@@ -404,7 +382,7 @@
 {#if previewIndex !== null}
   {@const page = pages[previewIndex]}
   <div
-    class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+    class="fixed inset-0 bg-black/70 overflow-y-auto z-50"
     onclick={(e) => { if (e.target === e.currentTarget) closePreview() }}
     onkeydown={onPreviewKeydown}
     role="dialog"
@@ -414,7 +392,7 @@
   >
     <!-- Prev button -->
     <button
-      class="btn-icon absolute left-4 top-1/2 -translate-y-1/2 bg-(--surface-container) shadow-(--elev-2) z-10 disabled:opacity-30"
+      class="btn-icon fixed left-4 top-1/2 -translate-y-1/2 bg-(--surface-container) shadow-(--elev-2) z-10 disabled:opacity-30"
       onclick={prevPage}
       disabled={previewIndex === 0}
       aria-label="前のページ"
@@ -423,7 +401,7 @@
     </button>
 
     <!-- Page display -->
-    <div class="flex flex-col items-center gap-2 max-h-full">
+    <div class="min-h-full flex flex-col items-center justify-center gap-2 py-4 px-20">
       <!-- Header -->
       <div class="flex items-center gap-4 text-white">
         <span class="text-sm font-mono opacity-80">{previewIndex + 1} / {pageCount}</span>
@@ -436,25 +414,17 @@
         </button>
       </div>
 
-      <!-- Page (zoom + pan) -->
+      <!-- Page (zoom expands container) -->
       <!-- svelte-ignore a11y_no_noninteractive_element_interactions a11y_no_noninteractive_tabindex -->
       <div
-        class="rounded-xl shadow-(--elev-3) overflow-hidden select-none relative
-               {zoom > 1 ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default'}"
-        style="height: 75svh; aspect-ratio: 210/297;"
+        class="rounded-xl shadow-(--elev-3) select-none"
+        style="height: calc(90svh * {zoom}); aspect-ratio: 210/297;"
         onwheel={onWheelZoom}
-        onmousedown={onPanStart}
-        onmousemove={onPanMove}
-        onmouseup={onPanEnd}
-        onmouseleave={onPanEnd}
         role="application"
         tabindex={0}
-        aria-label="ページプレビュー（ドラッグでパン）"
+        aria-label="ページプレビュー"
       >
-        <div
-          class="absolute inset-0 origin-center"
-          style="transform: scale({zoom}) translate({panX}px, {panY}px); will-change: transform;"
-        >
+        <div class="w-full h-full">
           {@render thumb(page.id, page.rotation)}
         </div>
       </div>
