@@ -1,0 +1,28 @@
+---
+import ToolLayout from '@/layouts/ToolLayout.astro'
+import PdfEditor from '@/components/PdfEditor.svelte'
+import ToolInfo from '@/components/ToolInfo.astro'
+---
+
+<ToolLayout
+  title="PDF編集ツール"
+  description="PDFのページ閲覧・並び替え・削除・回転・結合・分割をブラウザ上で行えるツール"
+>
+  <PdfEditor client:load />
+
+  <ToolInfo
+    features={[
+      'PDFのページ一覧をサムネイルで表示・閲覧',
+      'ページの削除・左右回転・ドラッグ＆ドロップによる並び替え',
+      '複数のPDFファイルを結合して1つのファイルに',
+      '指定した位置でPDFをページ単位に分割してダウンロード',
+      'すべての処理はブラウザ上で完結、ファイルはサーバーに送信しない',
+    ]}
+    steps={[
+      'PDFファイルをドロップゾーンにドラッグ＆ドロップするかクリックして選択します。',
+      'ページ一覧でサムネイルを確認します。',
+      '「編集」ボタンでページの削除・回転・ドラッグによる並び替えができます。',
+      '「結合」ボタンで別のPDFを追加、「分割」ボタンで指定ページで分割してダウンロードできます。',
+    ]}
+  />
+</ToolLayout>
