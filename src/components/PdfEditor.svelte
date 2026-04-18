@@ -48,6 +48,7 @@
   }
 
   function deletePage(id: number) {
+    if (pageCount <= 1) return
     pages = pages.filter(p => p.id !== id)
     if (splitAt >= pageCount - 1) splitAt = Math.max(1, pageCount - 2)
   }
@@ -85,6 +86,47 @@
     dragOver = null
   }
 
+  // ─── Touch drag (grid reorder) ──────────────────────────────────────────
+  let touchDragIndex     = $state<number | null>(null)
+  let touchDragOverIndex = $state<number | null>(null)
+
+  function onPageTouchstart(e: TouchEvent, i: number) {
+    if (mode !== 'edit') return
+    touchDragIndex     = i
+    touchDragOverIndex = null
+    dragging           = i
+  }
+
+  function onPageTouchmove(e: TouchEvent) {
+    if (touchDragIndex === null) return
+    const touch = e.touches[0]
+    const els   = document.elementsFromPoint(touch.clientX, touch.clientY)
+    for (const el of els) {
+      const card = (el as HTMLElement).closest('[data-page-idx]') as HTMLElement | null
+      if (card) {
+        const idx = parseInt(card.dataset.pageIdx ?? '-1')
+        if (idx >= 0 && idx !== touchDragIndex) {
+          touchDragOverIndex = idx
+          dragOver           = idx
+          break
+        }
+      }
+    }
+  }
+
+  function onPageTouchend() {
+    if (touchDragIndex !== null && touchDragOverIndex !== null && touchDragIndex !== touchDragOverIndex) {
+      const arr = [...pages]
+      const [item] = arr.splice(touchDragIndex, 1)
+      arr.splice(touchDragOverIndex, 0, item)
+      pages = arr
+    }
+    touchDragIndex     = null
+    touchDragOverIndex = null
+    dragging           = null
+    dragOver           = null
+  }
+
   // ─── Preview ────────────────────────────────────────────────────────────
   let previewIndex = $state<number | null>(null)
   let zoom         = $state(1.0)
@@ -103,7 +145,7 @@
     if (overlayEl) { overlayEl.scrollLeft = 0; overlayEl.scrollTop = 0 }
   }
 
-  function openPreview(i: number) { previewIndex = i; resetView() }
+  function openPreview(i: number) { previewIndex = i; resetView(); showControls = true }
   function closePreview()         { previewIndex = null }
 
   function prevPage() {
@@ -143,6 +185,8 @@
     isDragging    = false
     showControls  = false
   }
+
+  function onOverlayTouchstart() { showControls = true }
 
   function onPreviewKeydown(e: KeyboardEvent) {
     if      (e.key === 'Escape')              closePreview()
@@ -320,27 +364,32 @@
   <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
     {#each pages as page, i (page.id)}
       <div
-        class="relative rounded-xl border overflow-hidden select-none transition-all duration-150
-               {dragging !== null && dragOver === i
+        class="group relative rounded-xl border overflow-hidden select-none transition-all duration-150
+               {(dragging !== null && dragOver === i) || (touchDragIndex !== null && touchDragOverIndex === i)
                  ? 'border-[var(--color-primary)] shadow-[var(--elev-3)] scale-[1.04]'
-                 : dragging === i
+                 : dragging === i || touchDragIndex === i
                  ? 'opacity-30 border-[var(--outline-variant)]'
                  : mode === 'viewer'
                  ? 'border-[var(--outline-variant)] bg-[var(--surface-container)] hover:shadow-[var(--elev-2)] hover:border-primary cursor-pointer'
                  : 'border-[var(--outline-variant)] bg-[var(--surface-container)] hover:shadow-[var(--elev-2)]'}"
+        data-page-idx={i}
         role="button"
         tabindex={mode === 'viewer' ? 0 : -1}
         draggable={mode === 'edit'}
+        style={mode === 'edit' ? 'touch-action: none' : ''}
         onclick={() => { if (mode === 'viewer') openPreview(i) }}
         onkeydown={(e) => { if (mode === 'viewer' && (e.key === 'Enter' || e.key === ' ')) openPreview(i) }}
         ondragstart={(e) => onDragStart(e, i)}
         ondragover={(e) => onDragOverPage(e, i)}
         ondrop={(e) => onDropPage(e, i)}
         ondragend={onDragEnd}
+        ontouchstart={(e) => onPageTouchstart(e, i)}
+        ontouchmove={onPageTouchmove}
+        ontouchend={onPageTouchend}
       >
         <!-- Edit mode toolbar -->
         {#if mode === 'edit'}
-          <div class="flex items-center justify-between px-1.5 py-1 bg-[var(--surface-variant)]">
+          <div class="flex items-center justify-between px-1.5 py-1 bg-[var(--surface-variant)] {dragging !== null || touchDragIndex !== null ? 'pointer-events-none' : ''}">
             <i class="fas fa-grip-vertical text-xs text-[var(--text-muted)] cursor-grab px-0.5"></i>
             <div class="flex gap-0.5">
               <button
@@ -358,8 +407,9 @@
                 <i class="fas fa-rotate-right" style="font-size:10px"></i>
               </button>
               <button
-                class="w-6 h-6 rounded flex items-center justify-center text-[var(--text-muted)] hover:bg-red-100 hover:text-red-500 transition-colors dark:hover:bg-red-950"
+                class="w-6 h-6 rounded flex items-center justify-center text-[var(--text-muted)] hover:bg-red-100 hover:text-red-500 transition-colors dark:hover:bg-red-950 disabled:opacity-30 disabled:cursor-not-allowed"
                 onclick={() => deletePage(page.id)}
+                disabled={pageCount <= 1}
                 title="このページを削除"
               >
                 <i class="fas fa-trash" style="font-size:10px"></i>
@@ -369,8 +419,13 @@
         {/if}
 
         <!-- Thumbnail -->
-        <div class="aspect-[210/297] p-1.5 bg-[var(--surface-container)]">
+        <div class="aspect-[210/297] p-1.5 bg-[var(--surface-container)] relative">
           {@render thumb(page.id, page.rotation)}
+          {#if mode === 'viewer'}
+            <div class="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 transition-colors duration-150 pointer-events-none">
+              <i class="fas fa-magnifying-glass-plus text-2xl text-white opacity-0 group-hover:opacity-100 transition-opacity duration-150 drop-shadow"></i>
+            </div>
+          {/if}
         </div>
 
         <!-- Page number -->
@@ -385,6 +440,8 @@
       class="border-2 border-dashed border-[var(--color-primary)] rounded-2xl p-6 flex flex-col items-center gap-3 text-center bg-[var(--color-primary-light)] transition-colors duration-200"
       ondragover={(e) => e.preventDefault()}
       ondrop={(e) => { e.preventDefault(); mergeFile(e.dataTransfer?.files[0]) }}
+      role="region"
+      aria-label="PDFを結合"
     >
       <i class="fas fa-layer-group text-3xl text-[var(--color-primary)]"></i>
       <div>
@@ -419,6 +476,7 @@
     onmousemove={onOverlayMousemove}
     onmouseup={onOverlayMouseup}
     onmouseleave={onOverlayMouseleave}
+    ontouchstart={onOverlayTouchstart}
     onkeydown={onPreviewKeydown}
     role="dialog"
     aria-modal="true"
@@ -427,7 +485,8 @@
   >
     <!-- Prev button -->
     <button
-      class="btn-icon fixed left-4 top-1/2 -translate-y-1/2 bg-(--surface-container) shadow-(--elev-2) z-10 disabled:opacity-30"
+      class="btn-icon fixed left-4 top-1/2 -translate-y-1/2 bg-(--surface-container) shadow-(--elev-2) z-60 disabled:opacity-30 transition-opacity duration-200
+             {showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}"
       onclick={prevPage}
       disabled={previewIndex === 0}
       aria-label="前のページ"
@@ -436,19 +495,7 @@
     </button>
 
     <!-- Page display -->
-    <div class="min-h-full flex flex-col items-center justify-center gap-2 py-4 px-20">
-      <!-- Header -->
-      <div class="flex items-center gap-4 text-white">
-        <span class="text-sm font-mono opacity-80">{previewIndex + 1} / {pageCount}</span>
-        <button
-          class="btn-icon text-white hover:bg-white/20"
-          onclick={closePreview}
-          aria-label="閉じる"
-        >
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-
+    <div class="min-h-full flex items-center justify-center py-4 px-20">
       <!-- Page (zoom expands container) -->
       <div
         class="rounded-xl shadow-(--elev-3) select-none"
@@ -458,7 +505,21 @@
           {@render thumb(page.id, page.rotation)}
         </div>
       </div>
+    </div>
 
+    <!-- Header: page counter + close (fixed top, shown with controls) -->
+    <div
+      class="fixed top-4 left-1/2 -translate-x-1/2 z-60 flex items-center gap-3 bg-black/50 backdrop-blur-sm rounded-full px-4 py-2 text-white transition-opacity duration-200
+             {showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}"
+    >
+      <span class="text-sm font-mono">{previewIndex + 1} / {pageCount}</span>
+      <button
+        class="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white/20 transition-colors"
+        onclick={closePreview}
+        aria-label="閉じる"
+      >
+        <i class="fas fa-times text-xs"></i>
+      </button>
     </div>
 
     <!-- Zoom controls (fixed at bottom, shown on hover) -->
@@ -496,7 +557,8 @@
 
     <!-- Next button -->
     <button
-      class="btn-icon fixed right-4 top-1/2 -translate-y-1/2 bg-(--surface-container) shadow-(--elev-2) z-10 disabled:opacity-30"
+      class="btn-icon fixed right-4 top-1/2 -translate-y-1/2 bg-(--surface-container) shadow-(--elev-2) z-60 disabled:opacity-30 transition-opacity duration-200
+             {showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}"
       onclick={nextPage}
       disabled={previewIndex === pageCount - 1}
       aria-label="次のページ"
@@ -513,9 +575,11 @@
   <div
     class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
     onclick={(e) => { if (e.target === e.currentTarget) showSplit = false }}
+    onkeydown={(e) => { if (e.key === 'Escape') showSplit = false }}
     role="dialog"
     aria-modal="true"
     aria-label="PDFを分割"
+    tabindex={-1}
   >
     <div class="bg-[var(--surface-container)] rounded-2xl shadow-[var(--elev-3)] w-full max-w-lg">
 
@@ -532,6 +596,7 @@
 
       <!-- Page selector -->
       <div class="p-5">
+        <div class="relative">
         <div class="flex items-stretch gap-0 overflow-x-auto pb-2">
           {#each pages as page, i (page.id)}
             <!-- Page box -->
@@ -562,6 +627,9 @@
               </button>
             {/if}
           {/each}
+        </div>
+        <!-- Right fade: scroll hint -->
+        <div class="absolute right-0 top-0 bottom-2 w-10 bg-gradient-to-l from-[var(--surface-container)] to-transparent pointer-events-none"></div>
         </div>
 
         <!-- Legend -->
