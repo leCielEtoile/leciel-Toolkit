@@ -88,12 +88,19 @@
   // ─── Preview ────────────────────────────────────────────────────────────
   let previewIndex = $state<number | null>(null)
   let zoom         = $state(1.0)
+  let overlayEl    = $state<HTMLDivElement | null>(null)
+  let isDragging   = $state(false)
+  let hasDragged   = false
+  let dragStart    = { x: 0, y: 0, scrollLeft: 0, scrollTop: 0 }
 
   const ZOOM_MIN  = 0.5
   const ZOOM_MAX  = 3.0
   const ZOOM_STEP = 0.25
 
-  function resetView() { zoom = 1.0 }
+  function resetView() {
+    zoom = 1.0
+    if (overlayEl) { overlayEl.scrollLeft = 0; overlayEl.scrollTop = 0 }
+  }
 
   function openPreview(i: number) { previewIndex = i; resetView() }
   function closePreview()         { previewIndex = null }
@@ -109,10 +116,26 @@
   function zoomIn()  { zoom = Math.min(ZOOM_MAX, +(zoom + ZOOM_STEP).toFixed(2)) }
   function zoomOut() { zoom = Math.max(ZOOM_MIN, +(zoom - ZOOM_STEP).toFixed(2)) }
 
-  function onWheelZoom(e: WheelEvent) {
+  function onOverlayMousedown(e: MouseEvent) {
+    if ((e.target as Element).closest('button')) return
+    isDragging = true
+    hasDragged = false
+    dragStart  = { x: e.clientX, y: e.clientY, scrollLeft: overlayEl!.scrollLeft, scrollTop: overlayEl!.scrollTop }
     e.preventDefault()
-    const delta = e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP
-    zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, +(zoom + delta).toFixed(2)))
+  }
+
+  function onOverlayMousemove(e: MouseEvent) {
+    if (!isDragging || !overlayEl) return
+    const dx = e.clientX - dragStart.x
+    const dy = e.clientY - dragStart.y
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasDragged = true
+    overlayEl.scrollLeft = dragStart.scrollLeft - dx
+    overlayEl.scrollTop  = dragStart.scrollTop  - dy
+  }
+
+  function onOverlayMouseup(e: MouseEvent) {
+    isDragging = false
+    if (!hasDragged && e.target === overlayEl) closePreview()
   }
 
   function onPreviewKeydown(e: KeyboardEvent) {
@@ -382,8 +405,13 @@
 {#if previewIndex !== null}
   {@const page = pages[previewIndex]}
   <div
-    class="fixed inset-0 bg-black/70 overflow-y-auto z-50"
-    onclick={(e) => { if (e.target === e.currentTarget) closePreview() }}
+    bind:this={overlayEl}
+    class="fixed inset-0 bg-black/70 overflow-auto z-50
+           {isDragging ? 'cursor-grabbing' : zoom > 1 ? 'cursor-grab' : 'cursor-default'}"
+    onmousedown={onOverlayMousedown}
+    onmousemove={onOverlayMousemove}
+    onmouseup={onOverlayMouseup}
+    onmouseleave={onOverlayMouseup}
     onkeydown={onPreviewKeydown}
     role="dialog"
     aria-modal="true"
@@ -415,14 +443,9 @@
       </div>
 
       <!-- Page (zoom expands container) -->
-      <!-- svelte-ignore a11y_no_noninteractive_element_interactions a11y_no_noninteractive_tabindex -->
       <div
         class="rounded-xl shadow-(--elev-3) select-none"
         style="height: calc(90svh * {zoom}); aspect-ratio: 210/297;"
-        onwheel={onWheelZoom}
-        role="application"
-        tabindex={0}
-        aria-label="ページプレビュー"
       >
         <div class="w-full h-full">
           {@render thumb(page.id, page.rotation)}
@@ -458,7 +481,7 @@
 
       <!-- Keyboard hint -->
       <p class="text-white/40 text-xs">
-        ← → ページ移動　スクロール / ± ズーム　0 でリセット　Esc で閉じる
+        ← → ページ移動　± ズーム　0 でリセット　ドラッグで移動　Esc で閉じる
       </p>
     </div>
 
