@@ -496,7 +496,7 @@
 
     <!-- Next button -->
     <button
-      class="btn-icon absolute right-4 top-1/2 -translate-y-1/2 bg-(--surface-container) shadow-(--elev-2) z-10 disabled:opacity-30"
+      class="btn-icon fixed right-4 top-1/2 -translate-y-1/2 bg-(--surface-container) shadow-(--elev-2) z-10 disabled:opacity-30"
       onclick={nextPage}
       disabled={previewIndex === pageCount - 1}
       aria-label="次のページ"
