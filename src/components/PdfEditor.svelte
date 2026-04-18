@@ -84,6 +84,31 @@
     dragging = null
     dragOver = null
   }
+
+  // ─── Preview ────────────────────────────────────────────────────────────
+  let previewIndex = $state<number | null>(null)
+
+  function openPreview(i: number) {
+    previewIndex = i
+  }
+
+  function closePreview() {
+    previewIndex = null
+  }
+
+  function prevPage() {
+    if (previewIndex !== null && previewIndex > 0) previewIndex--
+  }
+
+  function nextPage() {
+    if (previewIndex !== null && previewIndex < pageCount - 1) previewIndex++
+  }
+
+  function onPreviewKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape')      closePreview()
+    else if (e.key === 'ArrowLeft')  prevPage()
+    else if (e.key === 'ArrowRight') nextPage()
+  }
 </script>
 
 <!-- ──────────────────────────────────────────────────────────────────────── -->
@@ -257,8 +282,14 @@
                  ? 'border-[var(--color-primary)] shadow-[var(--elev-3)] scale-[1.04]'
                  : dragging === i
                  ? 'opacity-30 border-[var(--outline-variant)]'
+                 : mode === 'viewer'
+                 ? 'border-[var(--outline-variant)] bg-[var(--surface-container)] hover:shadow-[var(--elev-2)] hover:border-primary cursor-pointer'
                  : 'border-[var(--outline-variant)] bg-[var(--surface-container)] hover:shadow-[var(--elev-2)]'}"
+        role="button"
+        tabindex={mode === 'viewer' ? 0 : -1}
         draggable={mode === 'edit'}
+        onclick={() => { if (mode === 'viewer') openPreview(i) }}
+        onkeydown={(e) => { if (mode === 'viewer' && (e.key === 'Enter' || e.key === ' ')) openPreview(i) }}
         ondragstart={(e) => onDragStart(e, i)}
         ondragover={(e) => onDragOverPage(e, i)}
         ondrop={(e) => onDropPage(e, i)}
@@ -329,6 +360,70 @@
     </div>
   {/if}
 
+{/if}
+
+<!-- ──────────────────────────────────────────────────────────────────────── -->
+<!-- Preview Modal                                                             -->
+<!-- ──────────────────────────────────────────────────────────────────────── -->
+{#if previewIndex !== null}
+  {@const page = pages[previewIndex]}
+  <div
+    class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+    onclick={(e) => { if (e.target === e.currentTarget) closePreview() }}
+    onkeydown={onPreviewKeydown}
+    role="dialog"
+    aria-modal="true"
+    aria-label="ページ拡大表示"
+    tabindex={-1}
+  >
+    <!-- Prev button -->
+    <button
+      class="btn-icon absolute left-4 top-1/2 -translate-y-1/2 bg-(--surface-container) shadow-(--elev-2) z-10 disabled:opacity-30"
+      onclick={prevPage}
+      disabled={previewIndex === 0}
+      aria-label="前のページ"
+    >
+      <i class="fas fa-chevron-left"></i>
+    </button>
+
+    <!-- Page display -->
+    <div class="flex flex-col items-center gap-3 max-h-full">
+      <!-- Header -->
+      <div class="flex items-center gap-4 text-white">
+        <span class="text-sm font-mono opacity-80">{previewIndex + 1} / {pageCount}</span>
+        <button
+          class="btn-icon text-white hover:bg-white/20"
+          onclick={closePreview}
+          aria-label="閉じる"
+        >
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <!-- Page -->
+      <div
+        class="bg-white rounded-xl shadow-(--elev-3) overflow-hidden"
+        style="width: min(70vw, 420px);"
+      >
+        <div class="aspect-210/297">
+          {@render thumb(page.id, page.rotation)}
+        </div>
+      </div>
+
+      <!-- Keyboard hint -->
+      <p class="text-white/50 text-xs">← → キーでページ移動　Esc で閉じる</p>
+    </div>
+
+    <!-- Next button -->
+    <button
+      class="btn-icon absolute right-4 top-1/2 -translate-y-1/2 bg-(--surface-container) shadow-(--elev-2) z-10 disabled:opacity-30"
+      onclick={nextPage}
+      disabled={previewIndex === pageCount - 1}
+      aria-label="次のページ"
+    >
+      <i class="fas fa-chevron-right"></i>
+    </button>
+  </div>
 {/if}
 
 <!-- ──────────────────────────────────────────────────────────────────────── -->
