@@ -87,27 +87,63 @@
 
   // ─── Preview ────────────────────────────────────────────────────────────
   let previewIndex = $state<number | null>(null)
+  let zoom         = $state(1.0)
+  let panX         = $state(0)
+  let panY         = $state(0)
+  let isPanning    = $state(false)
+  let panStart     = { x: 0, y: 0, panX: 0, panY: 0 }
 
-  function openPreview(i: number) {
-    previewIndex = i
-  }
+  const ZOOM_MIN  = 0.5
+  const ZOOM_MAX  = 3.0
+  const ZOOM_STEP = 0.25
 
-  function closePreview() {
-    previewIndex = null
-  }
+  function resetView() { zoom = 1.0; panX = 0; panY = 0 }
+
+  function openPreview(i: number) { previewIndex = i; resetView() }
+  function closePreview()         { previewIndex = null }
 
   function prevPage() {
-    if (previewIndex !== null && previewIndex > 0) previewIndex--
+    if (previewIndex !== null && previewIndex > 0) { previewIndex--; resetView() }
   }
 
   function nextPage() {
-    if (previewIndex !== null && previewIndex < pageCount - 1) previewIndex++
+    if (previewIndex !== null && previewIndex < pageCount - 1) { previewIndex++; resetView() }
   }
 
+  function zoomIn()  { zoom = Math.min(ZOOM_MAX, +(zoom + ZOOM_STEP).toFixed(2)) }
+  function zoomOut() {
+    zoom = Math.max(ZOOM_MIN, +(zoom - ZOOM_STEP).toFixed(2))
+    if (zoom <= 1.0) { panX = 0; panY = 0 }
+  }
+
+  function onWheelZoom(e: WheelEvent) {
+    e.preventDefault()
+    const delta = e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP
+    zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, +(zoom + delta).toFixed(2)))
+    if (zoom <= 1.0) { panX = 0; panY = 0 }
+  }
+
+  function onPanStart(e: MouseEvent) {
+    if (zoom <= 1.0) return
+    isPanning = true
+    panStart  = { x: e.clientX, y: e.clientY, panX, panY }
+  }
+
+  function onPanMove(e: MouseEvent) {
+    if (!isPanning) return
+    panX = panStart.panX + (e.clientX - panStart.x) / zoom
+    panY = panStart.panY + (e.clientY - panStart.y) / zoom
+  }
+
+  function onPanEnd() { isPanning = false }
+
   function onPreviewKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape')      closePreview()
-    else if (e.key === 'ArrowLeft')  prevPage()
-    else if (e.key === 'ArrowRight') nextPage()
+    if      (e.key === 'Escape')                    closePreview()
+    else if (e.key === '+' || e.key === '=')         zoomIn()
+    else if (e.key === '-')                          zoomOut()
+    else if (e.key === '0')                          resetView()
+    else if (e.key === 'ArrowLeft'  && zoom === 1.0) prevPage()
+    else if (e.key === 'ArrowRight' && zoom === 1.0) nextPage()
   }
 </script>
 
@@ -400,18 +436,62 @@
         </button>
       </div>
 
-      <!-- Page -->
+      <!-- Page (zoom + pan) -->
       <div
-        class="bg-white rounded-xl shadow-(--elev-3) overflow-hidden"
-        style="width: min(70vw, 420px);"
+        class="rounded-xl shadow-(--elev-3) overflow-hidden select-none"
+        style="width: min(68vw, 420px);"
+        onwheel={onWheelZoom}
       >
-        <div class="aspect-210/297">
-          {@render thumb(page.id, page.rotation)}
+        <div
+          class="aspect-210/297 relative overflow-hidden
+                 {zoom > 1 ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default'}"
+          onmousedown={onPanStart}
+          onmousemove={onPanMove}
+          onmouseup={onPanEnd}
+          onmouseleave={onPanEnd}
+          role="application"
+          aria-label="ページプレビュー（ドラッグでパン）"
+        >
+          <div
+            class="absolute inset-0 origin-center"
+            style="transform: scale({zoom}) translate({panX}px, {panY}px); will-change: transform;"
+          >
+            {@render thumb(page.id, page.rotation)}
+          </div>
         </div>
       </div>
 
+      <!-- Zoom controls -->
+      <div class="flex items-center gap-1 bg-black/30 rounded-full px-3 py-1.5">
+        <button
+          class="w-7 h-7 rounded-full flex items-center justify-center text-white hover:bg-white/20 transition-colors disabled:opacity-30"
+          onclick={zoomOut}
+          disabled={zoom <= ZOOM_MIN}
+          aria-label="縮小"
+        >
+          <i class="fas fa-minus text-xs"></i>
+        </button>
+        <button
+          class="text-xs text-white font-mono w-12 text-center hover:text-white/70 transition-colors"
+          onclick={resetView}
+          title="クリックで 100% にリセット"
+        >
+          {Math.round(zoom * 100)}%
+        </button>
+        <button
+          class="w-7 h-7 rounded-full flex items-center justify-center text-white hover:bg-white/20 transition-colors disabled:opacity-30"
+          onclick={zoomIn}
+          disabled={zoom >= ZOOM_MAX}
+          aria-label="拡大"
+        >
+          <i class="fas fa-plus text-xs"></i>
+        </button>
+      </div>
+
       <!-- Keyboard hint -->
-      <p class="text-white/50 text-xs">← → キーでページ移動　Esc で閉じる</p>
+      <p class="text-white/40 text-xs">
+        ← → ページ移動　スクロール / ± ズーム　0 でリセット　Esc で閉じる
+      </p>
     </div>
 
     <!-- Next button -->
