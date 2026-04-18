@@ -441,7 +441,7 @@
       <div
         class="rounded-xl shadow-(--elev-3) overflow-hidden select-none relative
                {zoom > 1 ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default'}"
-        style="height: min(60svh, 460px); aspect-ratio: 210/297;"
+        style="height: 75svh; aspect-ratio: 210/297;"
         onwheel={onWheelZoom}
         onmousedown={onPanStart}
         onmousemove={onPanMove}
