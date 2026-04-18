@@ -57,6 +57,10 @@ export default defineConfig({
     plugins: [tailwindcss(), wasm(), copyVipsLibsPlugin(), coepCoopPlugin()],
     optimizeDeps: {
       exclude: ['wasm-vips'],
+      include: ['pdfjs-dist'],
+    },
+    worker: {
+      format: 'es',
     },
   },
 })

@@ -1,74 +1,151 @@
 <script lang="ts">
-  // ─── State ──────────────────────────────────────────────────────────────
-  let fileLoaded = $state(false)
-  let fileName   = $state('')
-  let mode       = $state<'viewer' | 'edit'>('viewer')
-  let showMerge  = $state(false)
-  let showSplit  = $state(false)
-  let splitAt    = $state(3)
-  let isDragOver = $state(false)
-  let dragging   = $state<number | null>(null)
-  let dragOver   = $state<number | null>(null)
+  import type { PDFDocumentProxy } from 'pdfjs-dist'
+  import { initRenderer, openDocument, renderPageToDataUrl } from '@/lib/pdf/pdf-renderer'
+  import {
+    type SourcePdf, type PageDescriptor,
+    getPageCount, buildPdf, splitPdf, downloadBytes,
+  } from '@/lib/pdf/pdf-engine'
 
-  interface Page { id: number; rotation: number }
+  // ─── Global state ────────────────────────────────────────────────────────
+  let fileLoaded   = $state(false)
+  let fileName     = $state('')
+  let mode         = $state<'viewer' | 'edit'>('viewer')
+  let showMerge    = $state(false)
+  let showSplit    = $state(false)
+  let splitAt      = $state(1)
+  let isDragOver   = $state(false)
+  let loading      = $state(false)
+  let loadingMsg   = $state('')
 
-  let pages = $state<Page[]>([
-    { id: 1, rotation: 0 },
-    { id: 2, rotation: 0 },
-    { id: 3, rotation: 0 },
-    { id: 4, rotation: 0 },
-    { id: 5, rotation: 0 },
-    { id: 6, rotation: 0 },
-  ])
+  // ─── PDF data ────────────────────────────────────────────────────────────
+  // sources: sourceId → { bytes, ... }
+  let sources      = new Map<string, SourcePdf>()
+  let pdfDocs      = new Map<string, PDFDocumentProxy>()   // pdfjs docs cache
 
-  let pageCount  = $derived(pages.length)
-  let splitLabel = $derived(
-    splitAt > 0 && splitAt < pageCount
-      ? `ページ 1–${splitAt} と ページ ${splitAt + 1}–${pageCount} の 2 ファイルに分割`
-      : '分割位置を選択してください'
-  )
+  // pages: 現在の表示順・状態
+  let pages        = $state<PageDescriptor[]>([])
+  let pageCount    = $derived(pages.length)
 
-  // ─── Handlers ───────────────────────────────────────────────────────────
-  function loadFile(file: File | undefined | null) {
-    if (!file) return
-    fileName  = file.name
-    fileLoaded = true
-    mode      = 'viewer'
-    showMerge = false
+  // サムネイル: "sourceId:srcIndex:rotation" → dataURL
+  let thumbnails   = $state<Map<string, string>>(new Map())
+
+  let idCounter    = 0
+  function nextId() { return ++idCounter }
+
+  function thumbKey(p: PageDescriptor) {
+    return `${p.sourceId}:${p.srcIndex}:${p.rotation}`
   }
 
-  function mergeFile(file: File | undefined | null) {
+  // ─── Renderer init (ブラウザのみ) ─────────────────────────────────────
+  let rendererReady = $state(false)
+  $effect(() => {
+    initRenderer().then(() => { rendererReady = true })
+  })
+
+  // ─── Load PDF ────────────────────────────────────────────────────────────
+  async function loadFile(file: File | undefined | null) {
     if (!file) return
-    const maxId = Math.max(...pages.map(p => p.id))
-    pages = [
-      ...pages,
-      ...Array.from({ length: 4 }, (_, i) => ({ id: maxId + i + 1, rotation: 0 })),
-    ]
-    showMerge = false
+    loading    = true
+    loadingMsg = 'PDFを読み込み中…'
+    try {
+      const bytes   = new Uint8Array(await file.arrayBuffer())
+      const srcId   = 'src-0'
+      sources       = new Map([[srcId, { id: srcId, bytes }]])
+
+      const count   = await getPageCount(bytes)
+      pages         = Array.from({ length: count }, (_, i) => ({
+        id: nextId(), sourceId: srcId, srcIndex: i, rotation: 0,
+      }))
+      splitAt       = Math.max(1, Math.floor(count / 2))
+      fileName      = file.name
+      fileLoaded    = true
+      mode          = 'viewer'
+      showMerge     = false
+      showSplit     = false
+      thumbnails    = new Map()
+
+      await renderAllThumbnails(srcId, bytes, count)
+    } finally {
+      loading = false
+    }
   }
 
+  async function renderAllThumbnails(srcId: string, bytes: Uint8Array, count: number) {
+    loadingMsg = 'サムネイルを生成中…'
+    if (!pdfDocs.has(srcId)) {
+      pdfDocs.set(srcId, await openDocument(bytes))
+    }
+    const doc = pdfDocs.get(srcId)!
+    for (let i = 0; i < count; i++) {
+      loadingMsg = `サムネイルを生成中… ${i + 1} / ${count}`
+      const url  = await renderPageToDataUrl(doc, i, 200)
+      // rotation 0 のキャッシュを格納（回転は各 rotation ごとにキャッシュ）
+      thumbnails = new Map(thumbnails).set(`${srcId}:${i}:0`, url)
+    }
+    loadingMsg = ''
+  }
+
+  /** 回転したサムネイルをキャッシュ（まだなければレンダリング） */
+  async function ensureRotatedThumb(p: PageDescriptor) {
+    const key = thumbKey(p)
+    if (thumbnails.has(key)) return
+    if (!pdfDocs.has(p.sourceId)) return
+
+    // canvas で元画像を回転させて生成
+    const base = thumbnails.get(`${p.sourceId}:${p.srcIndex}:0`)
+    if (!base) return
+
+    const img = await loadImage(base)
+    const { width: w, height: h } = img
+    const swap  = p.rotation === 90 || p.rotation === 270
+    const cw    = swap ? h : w
+    const ch    = swap ? w : h
+    const canvas = document.createElement('canvas')
+    canvas.width  = cw
+    canvas.height = ch
+    const ctx = canvas.getContext('2d')!
+    ctx.translate(cw / 2, ch / 2)
+    ctx.rotate((p.rotation * Math.PI) / 180)
+    ctx.drawImage(img, -w / 2, -h / 2)
+    thumbnails = new Map(thumbnails).set(key, canvas.toDataURL('image/jpeg', 0.85))
+  }
+
+  function loadImage(src: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      img.onload  = () => resolve(img)
+      img.onerror = reject
+      img.src     = src
+    })
+  }
+
+  // ─── Page operations ─────────────────────────────────────────────────────
   function deletePage(id: number) {
     if (pageCount <= 1) return
-    pages = pages.filter(p => p.id !== id)
-    if (splitAt >= pageCount - 1) splitAt = Math.max(1, pageCount - 2)
+    pages   = pages.filter(p => p.id !== id)
+    splitAt = Math.min(splitAt, pages.length - 1)
   }
 
-  function rotatePage(id: number, dir: 1 | -1) {
-    pages = pages.map(p =>
-      p.id === id ? { ...p, rotation: (p.rotation + dir * 90 + 360) % 360 } : p
-    )
+  async function rotatePage(id: number, dir: 1 | -1) {
+    pages = pages.map(p => {
+      if (p.id !== id) return p
+      const r = ((p.rotation + dir * 90) % 360 + 360) % 360
+      return { ...p, rotation: r }
+    })
+    // 回転後サムネイルを非同期で生成
+    const p = pages.find(p => p.id === id)
+    if (p) ensureRotatedThumb(p)
   }
+
+  // ─── Drag reorder ────────────────────────────────────────────────────────
+  let dragging   = $state<number | null>(null)
+  let dragOver   = $state<number | null>(null)
 
   function onDragStart(e: DragEvent, i: number) {
     dragging = i
     if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
   }
-
-  function onDragOverPage(e: DragEvent, i: number) {
-    e.preventDefault()
-    dragOver = i
-  }
-
+  function onDragOverPage(e: DragEvent, i: number) { e.preventDefault(); dragOver = i }
   function onDropPage(e: DragEvent, i: number) {
     e.preventDefault()
     if (dragging !== null && dragging !== i) {
@@ -77,14 +154,9 @@
       arr.splice(i, 0, item)
       pages = arr
     }
-    dragging = null
-    dragOver = null
+    dragging = null; dragOver = null
   }
-
-  function onDragEnd() {
-    dragging = null
-    dragOver = null
-  }
+  function onDragEnd() { dragging = null; dragOver = null }
 
   // ─── Touch drag (grid reorder) ──────────────────────────────────────────
   let touchDragIndex     = $state<number | null>(null)
@@ -92,11 +164,8 @@
 
   function onPageTouchstart(e: TouchEvent, i: number) {
     if (mode !== 'edit') return
-    touchDragIndex     = i
-    touchDragOverIndex = null
-    dragging           = i
+    touchDragIndex = i; touchDragOverIndex = null; dragging = i
   }
-
   function onPageTouchmove(e: TouchEvent) {
     if (touchDragIndex === null) return
     const touch = e.touches[0]
@@ -106,14 +175,11 @@
       if (card) {
         const idx = parseInt(card.dataset.pageIdx ?? '-1')
         if (idx >= 0 && idx !== touchDragIndex) {
-          touchDragOverIndex = idx
-          dragOver           = idx
-          break
+          touchDragOverIndex = idx; dragOver = idx; break
         }
       }
     }
   }
-
   function onPageTouchend() {
     if (touchDragIndex !== null && touchDragOverIndex !== null && touchDragIndex !== touchDragOverIndex) {
       const arr = [...pages]
@@ -121,15 +187,69 @@
       arr.splice(touchDragOverIndex, 0, item)
       pages = arr
     }
-    touchDragIndex     = null
-    touchDragOverIndex = null
-    dragging           = null
-    dragOver           = null
+    touchDragIndex = null; touchDragOverIndex = null; dragging = null; dragOver = null
   }
 
-  // ─── Preview ────────────────────────────────────────────────────────────
-  let previewIndex = $state<number | null>(null)
-  let zoom         = $state(1.0)
+  // ─── Merge ───────────────────────────────────────────────────────────────
+  async function mergeFile(file: File | undefined | null) {
+    if (!file) return
+    loading    = true
+    loadingMsg = '結合するPDFを読み込み中…'
+    try {
+      const bytes  = new Uint8Array(await file.arrayBuffer())
+      const srcId  = `src-${sources.size}`
+      sources      = new Map(sources).set(srcId, { id: srcId, bytes })
+
+      const count  = await getPageCount(bytes)
+      const newPages: PageDescriptor[] = Array.from({ length: count }, (_, i) => ({
+        id: nextId(), sourceId: srcId, srcIndex: i, rotation: 0,
+      }))
+      pages     = [...pages, ...newPages]
+      showMerge = false
+
+      await renderAllThumbnails(srcId, bytes, count)
+    } finally {
+      loading = false
+    }
+  }
+
+  // ─── Download (all pages) ────────────────────────────────────────────────
+  async function handleDownload() {
+    loading    = true
+    loadingMsg = 'PDFを生成中…'
+    try {
+      const bytes = await buildPdf(sources, pages)
+      const base  = fileName.replace(/\.pdf$/i, '')
+      downloadBytes(bytes, `${base}_edited.pdf`)
+    } finally {
+      loading = false
+    }
+  }
+
+  // ─── Split ───────────────────────────────────────────────────────────────
+  async function handleSplit() {
+    loading    = true
+    loadingMsg = 'PDFを分割中…'
+    try {
+      const [first, second] = await splitPdf(sources, pages, splitAt)
+      const base = fileName.replace(/\.pdf$/i, '')
+      downloadBytes(first,  `${base}_1-${splitAt}.pdf`)
+      downloadBytes(second, `${base}_${splitAt + 1}-${pageCount}.pdf`)
+      showSplit = false
+    } finally {
+      loading = false
+    }
+  }
+
+  let splitLabel = $derived(
+    splitAt > 0 && splitAt < pageCount
+      ? `ページ 1–${splitAt} と ページ ${splitAt + 1}–${pageCount} の 2 ファイルに分割`
+      : '分割位置を選択してください'
+  )
+
+  // ─── Preview ─────────────────────────────────────────────────────────────
+  let previewIndex  = $state<number | null>(null)
+  let zoom          = $state(1.0)
   let overlayEl     = $state<HTMLDivElement | null>(null)
   let isDragging    = $state(false)
   let showControls  = $state(false)
@@ -144,29 +264,25 @@
     zoom = 1.0
     if (overlayEl) { overlayEl.scrollLeft = 0; overlayEl.scrollTop = 0 }
   }
-
-  function openPreview(i: number) { previewIndex = i; resetView(); showControls = true }
-  function closePreview()         { previewIndex = null }
-
-  function prevPage() {
-    if (previewIndex !== null && previewIndex > 0) { previewIndex--; resetView() }
+  function openPreview(i: number) {
+    previewIndex = i; resetView(); showControls = true
+    // プレビュー表示時に回転済みサムネイルを確保
+    const p = pages[i]
+    if (p) ensureRotatedThumb(p)
   }
-
-  function nextPage() {
-    if (previewIndex !== null && previewIndex < pageCount - 1) { previewIndex++; resetView() }
-  }
+  function closePreview()  { previewIndex = null }
+  function prevPage() { if (previewIndex !== null && previewIndex > 0) { previewIndex--; resetView(); const p = pages[previewIndex]; if (p) ensureRotatedThumb(p) } }
+  function nextPage() { if (previewIndex !== null && previewIndex < pageCount - 1) { previewIndex++; resetView(); const p = pages[previewIndex]; if (p) ensureRotatedThumb(p) } }
 
   function zoomIn()  { zoom = Math.min(ZOOM_MAX, +(zoom + ZOOM_STEP).toFixed(2)) }
   function zoomOut() { zoom = Math.max(ZOOM_MIN, +(zoom - ZOOM_STEP).toFixed(2)) }
 
   function onOverlayMousedown(e: MouseEvent) {
     if ((e.target as Element).closest('button')) return
-    isDragging = true
-    hasDragged = false
+    isDragging = true; hasDragged = false
     dragStart  = { x: e.clientX, y: e.clientY, scrollLeft: overlayEl!.scrollLeft, scrollTop: overlayEl!.scrollTop }
     e.preventDefault()
   }
-
   function onOverlayMousemove(e: MouseEvent) {
     if (!isDragging || !overlayEl) return
     const dx = e.clientX - dragStart.x
@@ -175,118 +291,32 @@
     overlayEl.scrollLeft = dragStart.scrollLeft - dx
     overlayEl.scrollTop  = dragStart.scrollTop  - dy
   }
-
   function onOverlayMouseup(e: MouseEvent) {
     isDragging = false
     if (!hasDragged && e.target === overlayEl) closePreview()
   }
-
-  function onOverlayMouseleave() {
-    isDragging    = false
-    showControls  = false
-  }
-
-  function onOverlayTouchstart() { showControls = true }
+  function onOverlayMouseleave() { isDragging = false; showControls = false }
+  function onOverlayTouchstart()  { showControls = true }
 
   function onPreviewKeydown(e: KeyboardEvent) {
-    if      (e.key === 'Escape')              closePreview()
-    else if (e.key === '+' || e.key === '=')  zoomIn()
-    else if (e.key === '-')                   zoomOut()
-    else if (e.key === '0')                   resetView()
-    else if (e.key === 'ArrowLeft')           prevPage()
-    else if (e.key === 'ArrowRight')          nextPage()
+    if      (e.key === 'Escape')             closePreview()
+    else if (e.key === '+' || e.key === '=') zoomIn()
+    else if (e.key === '-')                  zoomOut()
+    else if (e.key === '0')                  resetView()
+    else if (e.key === 'ArrowLeft')          prevPage()
+    else if (e.key === 'ArrowRight')         nextPage()
   }
 </script>
 
 <!-- ──────────────────────────────────────────────────────────────────────── -->
-<!-- Thumbnail snippet                                                         -->
+<!-- Loading overlay                                                           -->
 <!-- ──────────────────────────────────────────────────────────────────────── -->
-{#snippet thumb(pageId: number, rotation: number)}
-  {@const pat = (pageId - 1) % 4}
-  <svg
-    viewBox="0 0 210 297"
-    xmlns="http://www.w3.org/2000/svg"
-    class="w-full h-full block"
-    style="transform: rotate({rotation}deg); transition: transform 0.3s ease; transform-origin: center;"
-  >
-    <rect width="210" height="297" fill="white" rx="2"/>
-
-    {#if pat === 0}
-      <!-- ▸ Title page -->
-      <rect x="40"  y="88"  width="130" height="14" rx="4"   fill="#c5b8f8"/>
-      <rect x="60"  y="110" width="90"  height="9"  rx="3"   fill="#ddd5fb"/>
-      <rect x="75"  y="126" width="60"  height="6"  rx="2"   fill="#ebe7ff"/>
-      <rect x="20"  y="205" width="170" height="1"           fill="#ebebeb"/>
-      <rect x="65"  y="212" width="80"  height="5"  rx="2"   fill="#e0e0e0"/>
-      <rect x="75"  y="223" width="60"  height="4"  rx="2"   fill="#e0e0e0"/>
-
-    {:else if pat === 1}
-      <!-- ▸ Text page -->
-      <rect x="20" y="22"  width="115" height="9"  rx="3"   fill="#bbb"/>
-      <rect x="20" y="44"  width="165" height="5"  rx="1.5" fill="#e0e0e0"/>
-      <rect x="20" y="57"  width="155" height="5"  rx="1.5" fill="#e0e0e0"/>
-      <rect x="20" y="70"  width="165" height="5"  rx="1.5" fill="#e0e0e0"/>
-      <rect x="20" y="83"  width="140" height="5"  rx="1.5" fill="#e0e0e0"/>
-      <rect x="20" y="96"  width="160" height="5"  rx="1.5" fill="#e0e0e0"/>
-      <rect x="20" y="109" width="165" height="5"  rx="1.5" fill="#e0e0e0"/>
-      <rect x="20" y="122" width="150" height="5"  rx="1.5" fill="#e0e0e0"/>
-      <rect x="20" y="135" width="162" height="5"  rx="1.5" fill="#e0e0e0"/>
-      <rect x="20" y="157" width="85"  height="8"  rx="2"   fill="#d5d5d5"/>
-      <rect x="20" y="177" width="165" height="5"  rx="1.5" fill="#e0e0e0"/>
-      <rect x="20" y="190" width="148" height="5"  rx="1.5" fill="#e0e0e0"/>
-      <rect x="20" y="203" width="162" height="5"  rx="1.5" fill="#e0e0e0"/>
-      <rect x="20" y="216" width="155" height="5"  rx="1.5" fill="#e0e0e0"/>
-      <rect x="20" y="229" width="165" height="5"  rx="1.5" fill="#e0e0e0"/>
-
-    {:else if pat === 2}
-      <!-- ▸ Chart page -->
-      <rect x="20" y="22"  width="105" height="8"  rx="3"   fill="#bbb"/>
-      <rect x="20" y="40"  width="165" height="5"  rx="1.5" fill="#ebebeb"/>
-      <rect x="20" y="51"  width="145" height="5"  rx="1.5" fill="#ebebeb"/>
-      <!-- chart area -->
-      <rect x="20" y="68"  width="170" height="105" rx="5"  fill="#f0eeff"/>
-      <!-- bars -->
-      <rect x="28"  y="118" width="18" height="55" rx="3"   fill="#9575cd"/>
-      <rect x="52"  y="133" width="18" height="40" rx="3"   fill="#9575cd"/>
-      <rect x="76"  y="103" width="18" height="70" rx="3"   fill="#9575cd"/>
-      <rect x="100" y="143" width="18" height="30" rx="3"   fill="#9575cd"/>
-      <rect x="124" y="120" width="18" height="53" rx="3"   fill="#9575cd"/>
-      <rect x="148" y="128" width="18" height="45" rx="3"   fill="#9575cd"/>
-      <!-- legend -->
-      <rect x="20" y="185" width="165" height="5"  rx="1.5" fill="#e0e0e0"/>
-      <rect x="20" y="198" width="148" height="5"  rx="1.5" fill="#e0e0e0"/>
-      <rect x="20" y="211" width="158" height="5"  rx="1.5" fill="#e0e0e0"/>
-      <rect x="20" y="224" width="140" height="5"  rx="1.5" fill="#e0e0e0"/>
-
-    {:else}
-      <!-- ▸ Mixed (text + image) -->
-      <rect x="20" y="22"  width="110" height="8"  rx="3"   fill="#bbb"/>
-      <rect x="20" y="40"  width="165" height="5"  rx="1.5" fill="#ebebeb"/>
-      <rect x="20" y="53"  width="165" height="5"  rx="1.5" fill="#ebebeb"/>
-      <rect x="20" y="66"  width="150" height="5"  rx="1.5" fill="#ebebeb"/>
-      <rect x="20" y="79"  width="165" height="5"  rx="1.5" fill="#ebebeb"/>
-      <!-- image box -->
-      <rect x="112" y="102" width="78"  height="72" rx="4"  fill="#e8f0fe"/>
-      <rect x="122" y="116" width="58"  height="6"  rx="2"  fill="#c5d8fb"/>
-      <rect x="127" y="130" width="48"  height="26" rx="3"  fill="#a8c5f8"/>
-      <!-- text beside image -->
-      <rect x="20" y="102" width="84"  height="5"  rx="1.5" fill="#ebebeb"/>
-      <rect x="20" y="115" width="84"  height="5"  rx="1.5" fill="#ebebeb"/>
-      <rect x="20" y="128" width="80"  height="5"  rx="1.5" fill="#ebebeb"/>
-      <rect x="20" y="141" width="84"  height="5"  rx="1.5" fill="#ebebeb"/>
-      <rect x="20" y="154" width="72"  height="5"  rx="1.5" fill="#ebebeb"/>
-      <!-- bottom text -->
-      <rect x="20" y="190" width="165" height="5"  rx="1.5" fill="#e0e0e0"/>
-      <rect x="20" y="203" width="152" height="5"  rx="1.5" fill="#e0e0e0"/>
-      <rect x="20" y="216" width="160" height="5"  rx="1.5" fill="#e0e0e0"/>
-      <rect x="20" y="229" width="145" height="5"  rx="1.5" fill="#e0e0e0"/>
-    {/if}
-
-    <!-- footer rule + page number -->
-    <rect x="20"  y="278" width="170" height="1"  fill="#ebebeb"/>
-    <rect x="92"  y="284" width="26"  height="5"  rx="2"   fill="#e0e0e0"/>
-  </svg>
-{/snippet}
+{#if loading}
+  <div class="fixed inset-0 bg-black/50 flex flex-col items-center justify-center gap-4 z-[100]">
+    <div class="w-10 h-10 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
+    <p class="text-white text-sm font-medium">{loadingMsg}</p>
+  </div>
+{/if}
 
 <!-- ──────────────────────────────────────────────────────────────────────── -->
 <!-- Upload Zone                                                               -->
@@ -346,7 +376,7 @@
         >
           <i class="fas fa-scissors"></i>分割
         </button>
-        <button class="btn-filled text-sm">
+        <button class="btn-filled text-sm" onclick={handleDownload}>
           <i class="fas fa-download"></i>DL
         </button>
       {:else}
@@ -359,6 +389,11 @@
       {/if}
     </div>
   </div>
+
+  <!-- サムネイル生成中バナー -->
+  {#if loadingMsg}
+    <p class="text-xs text-center text-[var(--text-muted)] animate-pulse">{loadingMsg}</p>
+  {/if}
 
   <!-- Page Grid -->
   <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
@@ -389,7 +424,8 @@
       >
         <!-- Edit mode toolbar -->
         {#if mode === 'edit'}
-          <div class="flex items-center justify-between px-1.5 py-1 bg-[var(--surface-variant)] {dragging !== null || touchDragIndex !== null ? 'pointer-events-none' : ''}">
+          <div class="flex items-center justify-between px-1.5 py-1 bg-[var(--surface-variant)]
+                      {dragging !== null || touchDragIndex !== null ? 'pointer-events-none' : ''}">
             <i class="fas fa-grip-vertical text-xs text-[var(--text-muted)] cursor-grab px-0.5"></i>
             <div class="flex gap-0.5">
               <button
@@ -419,8 +455,28 @@
         {/if}
 
         <!-- Thumbnail -->
-        <div class="aspect-[210/297] p-1.5 bg-[var(--surface-container)] relative">
-          {@render thumb(page.id, page.rotation)}
+        <div class="aspect-[210/297] bg-[var(--surface-container)] relative overflow-hidden">
+          {#if thumbnails.has(thumbKey(page))}
+            <img
+              src={thumbnails.get(thumbKey(page))}
+              alt="ページ {i + 1}"
+              class="w-full h-full object-contain"
+            />
+          {:else if thumbnails.has(`${page.sourceId}:${page.srcIndex}:0`)}
+            <!-- 回転済みキャッシュが未生成の場合は CSS で代用 -->
+            <img
+              src={thumbnails.get(`${page.sourceId}:${page.srcIndex}:0`)}
+              alt="ページ {i + 1}"
+              class="w-full h-full object-contain"
+              style="transform: rotate({page.rotation}deg); transform-origin: center;"
+            />
+          {:else}
+            <!-- まだレンダリング中 -->
+            <div class="w-full h-full flex items-center justify-center bg-[var(--surface-variant)]">
+              <i class="fas fa-file-pdf text-2xl text-[var(--text-muted)] opacity-40 animate-pulse"></i>
+            </div>
+          {/if}
+
           {#if mode === 'viewer'}
             <div class="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 transition-colors duration-150 pointer-events-none">
               <i class="fas fa-magnifying-glass-plus text-2xl text-white opacity-0 group-hover:opacity-100 transition-opacity duration-150 drop-shadow"></i>
@@ -496,18 +552,32 @@
 
     <!-- Page display -->
     <div class="min-h-full flex items-center justify-center py-4 px-20">
-      <!-- Page (zoom expands container) -->
       <div
-        class="rounded-xl shadow-(--elev-3) select-none"
+        class="rounded-xl shadow-(--elev-3) select-none overflow-hidden"
         style="height: calc(90svh * {zoom}); aspect-ratio: 210/297;"
       >
-        <div class="w-full h-full">
-          {@render thumb(page.id, page.rotation)}
-        </div>
+        {#if thumbnails.has(thumbKey(page))}
+          <img
+            src={thumbnails.get(thumbKey(page))}
+            alt="ページ {previewIndex + 1}"
+            class="w-full h-full object-contain bg-white"
+          />
+        {:else if thumbnails.has(`${page.sourceId}:${page.srcIndex}:0`)}
+          <img
+            src={thumbnails.get(`${page.sourceId}:${page.srcIndex}:0`)}
+            alt="ページ {previewIndex + 1}"
+            class="w-full h-full object-contain bg-white"
+            style="transform: rotate({page.rotation}deg); transform-origin: center;"
+          />
+        {:else}
+          <div class="w-full h-full flex items-center justify-center bg-white">
+            <i class="fas fa-file-pdf text-4xl text-[var(--text-muted)] opacity-30 animate-pulse"></i>
+          </div>
+        {/if}
       </div>
     </div>
 
-    <!-- Header: page counter + close (fixed top, shown with controls) -->
+    <!-- Header: page counter + close (fixed top) -->
     <div
       class="fixed top-4 left-1/2 -translate-x-1/2 z-60 flex items-center gap-3 bg-black/50 backdrop-blur-sm rounded-full px-4 py-2 text-white transition-opacity duration-200
              {showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}"
@@ -522,7 +592,7 @@
       </button>
     </div>
 
-    <!-- Zoom controls (fixed at bottom, shown on hover) -->
+    <!-- Zoom controls (fixed at bottom) -->
     <div
       class="fixed bottom-6 left-1/2 -translate-x-1/2 z-60 flex flex-col items-center gap-1.5 transition-opacity duration-200
              {showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}"
@@ -652,7 +722,7 @@
         <button class="btn-outlined" onclick={() => showSplit = false}>キャンセル</button>
         <button
           class="btn-filled"
-          onclick={() => showSplit = false}
+          onclick={handleSplit}
           disabled={splitAt <= 0 || splitAt >= pageCount}
         >
           <i class="fas fa-scissors"></i>分割してDL
