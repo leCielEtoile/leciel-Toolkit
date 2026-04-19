@@ -1,0 +1,28 @@
+---
+import ToolLayout from '@/layouts/ToolLayout.astro'
+import OcrTool from '@/components/OcrTool.svelte'
+import ToolInfo from '@/components/ToolInfo.astro'
+---
+
+<ToolLayout
+  title="OCR テキスト抽出"
+  description="画像からテキストを抽出するブラウザ完結型 OCR ツール。日本語・英語など複数言語に対応。"
+>
+  <OcrTool client:load />
+
+  <ToolInfo
+    features={[
+      '日本語・英語・中国語・韓国語など 8 言語に対応（複数言語を同時指定可）',
+      'PNG・JPEG・WebP・BMP・TIFF など主要画像フォーマットをサポート',
+      '認識の進捗をリアルタイムで表示',
+      '認識結果を .txt ファイルとしてダウンロード、またはクリップボードにコピー',
+      'すべての処理はブラウザ内で完結。画像がサーバーに送信されることはない',
+    ]}
+    steps={[
+      '認識したい言語を選択します（複数選択可）。初回は言語データが自動的にダウンロードされます（各言語約 4MB）。',
+      'テキストを含む画像をドロップゾーンにドラッグ＆ドロップ、またはクリックして選択します。',
+      '「テキストを抽出」ボタンを押すと認識が開始されます。進捗バーで処理状況を確認できます。',
+      '認識完了後、抽出されたテキストが表示されます。コピーボタンでクリップボードへ、または .txt ファイルとしてダウンロードできます。',
+    ]}
+  />
+</ToolLayout>

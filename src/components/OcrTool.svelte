@@ -1,0 +1,246 @@
+<script lang="ts">
+  import FileDropZone from './FileDropZone.svelte'
+  import Toast from './Toast.svelte'
+  import { toast } from '@/lib/toast.svelte'
+  import { triggerDownload } from '@/lib/utils'
+
+  // ─── 言語定義 ────────────────────────────────────────────────
+  const LANGUAGES = [
+    { code: 'jpn', label: '日本語' },
+    { code: 'eng', label: '英語' },
+    { code: 'chi_sim', label: '中国語（簡体）' },
+    { code: 'chi_tra', label: '中国語（繁体）' },
+    { code: 'kor', label: '韓国語' },
+    { code: 'fra', label: 'フランス語' },
+    { code: 'deu', label: 'ドイツ語' },
+    { code: 'spa', label: 'スペイン語' },
+  ]
+
+  // ─── 状態 ────────────────────────────────────────────────────
+  let selectedLangs = $state<string[]>(['jpn', 'eng'])
+  let file          = $state<File | null>(null)
+  let previewUrl    = $state<string | null>(null)
+  let status        = $state<'idle' | 'recognizing' | 'done' | 'error'>('idle')
+  let progress      = $state(0)
+  let progressLabel = $state('')
+  let resultText    = $state('')
+  let confidence    = $state(0)
+
+  // ─── 言語トグル ──────────────────────────────────────────────
+  function toggleLang(code: string) {
+    if (selectedLangs.includes(code)) {
+      if (selectedLangs.length === 1) return  // 最低1言語
+      selectedLangs = selectedLangs.filter((l) => l !== code)
+    } else {
+      selectedLangs = [...selectedLangs, code]
+    }
+  }
+
+  // ─── ファイル選択 ────────────────────────────────────────────
+  function handleFiles(files: File[]) {
+    const f = files[0]
+    if (!f) return
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
+    file = f
+    previewUrl = URL.createObjectURL(f)
+    status = 'idle'
+    resultText = ''
+    progress = 0
+  }
+
+  // ─── OCR 実行（モック） ───────────────────────────────────────
+  async function recognize() {
+    if (!file) { toast.notify('画像を選択してください', 'error'); return }
+    if (selectedLangs.length === 0) { toast.notify('言語を1つ以上選択してください', 'error'); return }
+
+    status = 'recognizing'
+    progress = 0
+    resultText = ''
+
+    // モック: 段階的進捗シミュレーション
+    const stages: { label: string; end: number }[] = [
+      { label: 'Tesseract エンジンを読み込み中…', end: 20 },
+      { label: '言語データを準備中…', end: 45 },
+      { label: 'テキストを認識中…', end: 85 },
+      { label: '結果を整形中…', end: 100 },
+    ]
+
+    for (const stage of stages) {
+      progressLabel = stage.label
+      while (progress < stage.end) {
+        await new Promise((r) => setTimeout(r, 30))
+        progress = Math.min(progress + Math.random() * 4 + 1, stage.end)
+      }
+    }
+
+    // モック結果
+    resultText = [
+      'leciel ToolKit',
+      '',
+      'ブラウザ上で動作するウェブツール集。',
+      'すべての処理はクライアントサイドで完結し、',
+      'サーバーへのデータ送信は行いません。',
+      '',
+      '※ これはモックデータです。',
+      '   実際の OCR 結果がここに表示されます。',
+    ].join('\n')
+    confidence = 94.2
+
+    status = 'done'
+    toast.notify('テキストの抽出が完了しました')
+  }
+
+  // ─── コピー ──────────────────────────────────────────────────
+  async function copyText() {
+    await navigator.clipboard.writeText(resultText)
+    toast.notify('クリップボードにコピーしました')
+  }
+
+  // ─── ダウンロード ────────────────────────────────────────────
+  function downloadText() {
+    const baseName = file?.name.replace(/\.[^.]+$/, '') ?? 'ocr-result'
+    const blob = new Blob([resultText], { type: 'text/plain;charset=utf-8' })
+    triggerDownload(blob, `${baseName}.txt`)
+  }
+
+  // ─── リセット ────────────────────────────────────────────────
+  function reset() {
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
+    file = null
+    previewUrl = null
+    status = 'idle'
+    progress = 0
+    resultText = ''
+    confidence = 0
+  }
+</script>
+
+<div class="flex flex-col gap-5">
+
+  <Toast />
+
+  <!-- ═══ 言語選択 ════════════════════════════════════════════ -->
+  <section class="m3-card px-5 py-4 flex flex-col gap-3">
+    <p class="text-xs font-medium text-[var(--text-muted)]">認識言語（複数選択可）</p>
+    <div class="flex flex-wrap gap-2">
+      {#each LANGUAGES as lang}
+        <button
+          onclick={() => toggleLang(lang.code)}
+          class="px-3 py-1.5 rounded-full text-xs font-medium border transition-colors cursor-pointer
+            {selectedLangs.includes(lang.code)
+              ? 'bg-[var(--color-primary)] border-[var(--color-primary)] text-white'
+              : 'border-[var(--outline-variant)] text-[var(--text-muted)] hover:bg-[var(--color-primary-light)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]'}"
+        >
+          {lang.label}
+        </button>
+      {/each}
+    </div>
+    <p class="text-[10px] text-[var(--text-muted)]">
+      <i class="fas fa-info-circle"></i>
+      言語データは初回使用時に自動取得されます（日本語・英語 各 約 4MB）。以降はキャッシュされます。
+    </p>
+  </section>
+
+  <!-- ═══ ファイル選択 ════════════════════════════════════════ -->
+  {#if !file}
+    <FileDropZone
+      accept=".png,.jpg,.jpeg,.webp,.bmp,.tiff,.tif"
+      multiple={false}
+      onFiles={handleFiles}
+      label="画像をドロップしてテキスト抽出"
+      sublabel="PNG・JPEG・WebP・BMP・TIFF に対応"
+    />
+  {:else}
+    <!-- ─ ファイル情報 + プレビュー ─ -->
+    <section class="m3-card overflow-hidden">
+      <div class="flex items-center justify-between px-5 py-3 border-b border-[var(--outline-variant)]">
+        <div class="flex items-center gap-2 min-w-0">
+          <i class="fas fa-image text-[var(--color-primary)] shrink-0"></i>
+          <span class="text-sm font-medium truncate">{file.name}</span>
+        </div>
+        <button
+          onclick={reset}
+          class="text-xs text-[var(--text-muted)] hover:text-[var(--color-danger)] flex items-center gap-1 shrink-0 bg-transparent border-0 cursor-pointer ml-3"
+        >
+          <i class="fas fa-times"></i> 変更
+        </button>
+      </div>
+      {#if previewUrl}
+        <div class="flex items-center justify-center bg-[var(--surface-variant)] p-4 max-h-72 overflow-hidden">
+          <img
+            src={previewUrl}
+            alt="プレビュー"
+            class="max-h-64 max-w-full object-contain rounded-lg shadow"
+          />
+        </div>
+      {/if}
+    </section>
+  {/if}
+
+  <!-- ═══ 認識ボタン ════════════════════════════════════════ -->
+  {#if file && status !== 'recognizing'}
+    <button
+      onclick={recognize}
+      class="btn-filled w-full justify-center py-3 rounded-2xl text-base"
+    >
+      <i class="fas fa-font"></i>
+      {status === 'done' ? '再度テキストを抽出' : 'テキストを抽出'}
+    </button>
+  {/if}
+
+  <!-- ═══ 進捗 ══════════════════════════════════════════════ -->
+  {#if status === 'recognizing'}
+    <section class="m3-card px-5 py-4 flex flex-col gap-3">
+      <div class="flex items-center justify-between text-sm">
+        <span class="text-[var(--text-muted)] text-xs">{progressLabel}</span>
+        <span class="font-mono text-[var(--color-primary)] text-xs">{Math.floor(progress)}%</span>
+      </div>
+      <div class="w-full h-2 rounded-full bg-[var(--outline-variant)] overflow-hidden">
+        <div
+          class="h-full rounded-full bg-[var(--color-primary)] transition-all duration-200"
+          style="width: {progress}%"
+        ></div>
+      </div>
+    </section>
+  {/if}
+
+  <!-- ═══ 結果 ══════════════════════════════════════════════ -->
+  {#if status === 'done' && resultText}
+    <section class="m3-card overflow-hidden flex flex-col">
+
+      <!-- ヘッダー -->
+      <div class="flex items-center justify-between px-5 py-3 border-b border-[var(--outline-variant)]">
+        <div class="flex items-center gap-2">
+          <span class="section-heading">抽出結果</span>
+          <span class="text-xs text-[var(--text-muted)] bg-[var(--surface-variant)] px-2 py-0.5 rounded-full">
+            信頼度 {confidence.toFixed(1)}%
+          </span>
+        </div>
+        <div class="flex gap-2">
+          <button
+            onclick={copyText}
+            class="btn-outlined text-xs px-3 py-1.5"
+          >
+            <i class="fas fa-copy"></i> コピー
+          </button>
+          <button
+            onclick={downloadText}
+            class="btn-filled text-xs px-3 py-1.5"
+          >
+            <i class="fas fa-download"></i> .txt
+          </button>
+        </div>
+      </div>
+
+      <!-- テキスト本文 -->
+      <textarea
+        readonly
+        value={resultText}
+        rows={10}
+        class="w-full resize-y font-mono text-sm bg-[var(--background)] text-[var(--text)] px-5 py-4 border-0 outline-none leading-relaxed"
+      ></textarea>
+
+    </section>
+  {/if}
+
+</div>
