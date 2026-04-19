@@ -54,13 +54,20 @@ async function getWorker(
     cachedLangKey = ''
   }
 
-  const worker = await createWorker(langs, undefined, {
-    logger: (m: Tesseract.LoggerMessage) => {
-      onProgress({
-        status: toLabel(m.status),
-        progress: Math.round(m.progress * 100),
-      })
-    },
+  // createWorker の workerRes promise は 'load' 以外のステップ失敗時に
+  // pending のまま残る設計のため、errorHandler で wrapper Promise に繋ぐ
+  const worker = await new Promise<Tesseract.Worker>((resolve, reject) => {
+    createWorker(langs, undefined, {
+      logger: (m: Tesseract.LoggerMessage) => {
+        onProgress({
+          status: toLabel(m.status),
+          progress: Math.round(m.progress * 100),
+        })
+      },
+      errorHandler: (err: unknown) => {
+        reject(err instanceof Error ? err : new Error(String(err)))
+      },
+    }).then(resolve).catch(reject)
   })
 
   cachedWorker = worker
@@ -75,9 +82,12 @@ export async function recognize(
   langs: string[],
   onProgress: ProgressCallback,
 ): Promise<OcrResult> {
-  if (langs.length === 0) throw new Error('言語を1つ以上選択してください')
+  // Svelte 5 の $state は配列を Proxy でラップするため、
+  // postMessage でシリアライズできなくなる。スプレッドで生配列に変換する。
+  const rawLangs = [...langs]
+  if (rawLangs.length === 0) throw new Error('言語を1つ以上選択してください')
 
-  const worker = await getWorker(langs, onProgress)
+  const worker = await getWorker(rawLangs, onProgress)
 
   onProgress({ status: 'テキストを認識中…', progress: 0 })
 
