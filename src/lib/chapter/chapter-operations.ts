@@ -50,14 +50,6 @@ export function timeToSeconds(timeStr: string): number {
   return h * 3600 + m * 60 + s
 }
 
-export function secondsToTime(seconds: number): string {
-  return [
-    String(Math.floor(seconds / 3600)).padStart(2, '0'),
-    String(Math.floor((seconds % 3600) / 60)).padStart(2, '0'),
-    String(seconds % 60).padStart(2, '0'),
-  ].join(':')
-}
-
 export function isValidTimeFormat(timeStr: string): boolean {
   return /^\d{2}:\d{2}:\d{2}$/.test(timeStr)
 }
