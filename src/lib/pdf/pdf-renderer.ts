@@ -24,7 +24,11 @@ export async function initRenderer(): Promise<void> {
 /** PDF バイト列から PDFDocumentProxy を取得 */
 export async function openDocument(bytes: Uint8Array): Promise<PDFDocumentProxy> {
   if (!pdfjs) await initRenderer()
-  return pdfjs!.getDocument({ data: bytes }).promise
+  return pdfjs!.getDocument({
+    data: bytes,
+    cMapUrl: '/_astro/cmaps/',
+    cMapPacked: true,
+  }).promise
 }
 
 /**

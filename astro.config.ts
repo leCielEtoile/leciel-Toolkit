@@ -25,6 +25,25 @@ const copyVipsLibsPlugin = () => ({
   },
 })
 
+// pdfjs-dist requires CMap files for CJK font support.
+// Copy all .bcmap files from pdfjs-dist/cmaps/ to /_astro/cmaps/ in the build output.
+const copyPdfjsCmapsPlugin = () => ({
+  name: 'copy-pdfjs-cmaps',
+  generateBundle() {
+    const cmapsDir = path.resolve('node_modules/pdfjs-dist/cmaps')
+    if (!fs.existsSync(cmapsDir)) return
+    for (const file of fs.readdirSync(cmapsDir)) {
+      if (!file.endsWith('.bcmap')) continue
+      const src = path.join(cmapsDir, file)
+      ;(this as any).emitFile({
+        type: 'asset',
+        fileName: `_astro/cmaps/${file}`,
+        source: new Uint8Array(fs.readFileSync(src)),
+      })
+    }
+  },
+})
+
 // wasm-vips requires SharedArrayBuffer, which needs cross-origin isolation.
 // In production, _headers handles this scoped to /tools/image-converter/*.
 // For local dev/preview servers, inject the headers via middleware.
@@ -54,7 +73,7 @@ export default defineConfig({
   output: 'static',
   integrations: [svelte()],
   vite: {
-    plugins: [tailwindcss(), wasm(), copyVipsLibsPlugin(), coepCoopPlugin()],
+    plugins: [tailwindcss(), wasm(), copyVipsLibsPlugin(), copyPdfjsCmapsPlugin(), coepCoopPlugin()],
     optimizeDeps: {
       exclude: ['wasm-vips'],
       include: ['pdfjs-dist'],
