@@ -51,7 +51,7 @@ const coepCoopPlugin = () => ({
   name: 'coep-coop-image-converter',
   configureServer(server: any) {
     server.middlewares.use((req: any, res: any, next: any) => {
-      if (req.url?.startsWith('/tools/image-converter')) {
+      if (req.url?.startsWith('/tools/image-converter') || req.url?.startsWith('/tools/video-converter')) {
         res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp')
         res.setHeader('Cross-Origin-Opener-Policy', 'same-origin')
       }
@@ -60,7 +60,7 @@ const coepCoopPlugin = () => ({
   },
   configurePreviewServer(server: any) {
     server.middlewares.use((req: any, res: any, next: any) => {
-      if (req.url?.startsWith('/tools/image-converter')) {
+      if (req.url?.startsWith('/tools/image-converter') || req.url?.startsWith('/tools/video-converter')) {
         res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp')
         res.setHeader('Cross-Origin-Opener-Policy', 'same-origin')
       }
