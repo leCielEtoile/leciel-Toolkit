@@ -1,5 +1,8 @@
 <script lang="ts">
   import FileDropZone from './FileDropZone.svelte'
+  import Toast from './Toast.svelte'
+  import { toast } from '@/lib/toast.svelte'
+  import { triggerDownload } from '@/lib/utils'
   import {
     detectFileFormat, PARSERS, getFormatDisplayName, type Chapter
   } from '@/lib/chapter/parsers'
@@ -9,12 +12,10 @@
   } from '@/lib/chapter/chapter-operations'
 
   // ---- state ----
-  let editorText   = $state('')
-  let pasteText    = $state('')
-  let isShifted    = $state(false)
-  let lastFormat   = $state<string | null>(null)
-  let message      = $state<{ text: string; type: 'success' | 'error' } | null>(null)
-  let messageTimer = $state<ReturnType<typeof setTimeout> | null>(null)
+  let editorText = $state('')
+  let pasteText  = $state('')
+  let isShifted  = $state(false)
+  let lastFormat = $state<string | null>(null)
 
   // モーダル
   let addModal  = $state(false)
@@ -27,12 +28,6 @@
   let chapters = $derived(stringToChapters(editorText))
 
   // ---- helpers ----
-  function notify(text: string, type: 'success' | 'error' = 'success') {
-    if (messageTimer) clearTimeout(messageTimer)
-    message = { text, type }
-    messageTimer = setTimeout(() => { message = null }, 4000)
-  }
-
   function parseContent(content: string, filename = '') {
     if (!content.trim()) throw new Error('コンテンツが空です')
     const format = detectFileFormat(content, filename)
@@ -51,13 +46,13 @@
       try {
         const result = parseContent(e.target!.result as string, file.name)
         editorText = chaptersToString(result)
-        notify(`ファイルを変換しました（形式: ${getFormatDisplayName(lastFormat as any)}）`)
+        toast.notify(`ファイルを変換しました（形式: ${getFormatDisplayName(lastFormat as any)}）`)
       } catch (err) {
         editorText = ''
-        notify((err as Error).message, 'error')
+        toast.notify((err as Error).message, 'error')
       }
     }
-    reader.onerror = () => notify('ファイルの読み込みに失敗しました', 'error')
+    reader.onerror = () => toast.notify('ファイルの読み込みに失敗しました', 'error')
     reader.readAsText(file)
   }
 
@@ -66,43 +61,40 @@
     try {
       const result = parseContent(pasteText)
       editorText = chaptersToString(result)
-      notify(`コピペ入力を変換しました（形式: ${getFormatDisplayName(lastFormat as any)}）`)
+      toast.notify(`コピペ入力を変換しました（形式: ${getFormatDisplayName(lastFormat as any)}）`)
     } catch (err) {
       editorText = ''
-      notify((err as Error).message, 'error')
+      toast.notify((err as Error).message, 'error')
     }
   }
 
   // ---- toolbar actions ----
   function handleShift() {
-    if (chapters.length === 0) { notify('補正するチャプターがありません', 'error'); return }
+    if (chapters.length === 0) { toast.notify('補正するチャプターがありません', 'error'); return }
     editorText = chaptersToString(shiftChapterTimes(chapters, !isShifted))
     isShifted = !isShifted
-    notify(isShifted ? 'チャプター時間を1時間戻しました' : 'チャプター時間を元に戻しました')
+    toast.notify(isShifted ? 'チャプター時間を1時間戻しました' : 'チャプター時間を元に戻しました')
   }
 
   function handleFormat() {
-    if (chapters.length === 0) { notify('整形するチャプターがありません', 'error'); return }
+    if (chapters.length === 0) { toast.notify('整形するチャプターがありません', 'error'); return }
     editorText = chaptersToString(formatChapters(chapters))
-    notify('チャプターを整形しました')
+    toast.notify('チャプターを整形しました')
   }
 
   function handleDownload() {
-    if (!editorText.trim()) { notify('ダウンロードする内容が空です', 'error'); return }
-    const url = URL.createObjectURL(new Blob([editorText], { type: 'text/plain' }))
-    const a = document.createElement('a')
-    a.href = url; a.download = 'youtube-chapters.txt'; a.click()
-    URL.revokeObjectURL(url)
-    notify('チャプターファイルをダウンロードしました')
+    if (!editorText.trim()) { toast.notify('ダウンロードする内容が空です', 'error'); return }
+    triggerDownload(new Blob([editorText], { type: 'text/plain' }), 'youtube-chapters.txt')
+    toast.notify('チャプターファイルをダウンロードしました')
   }
 
   async function handleCopy() {
-    if (!editorText.trim()) { notify('コピーする内容が空です', 'error'); return }
+    if (!editorText.trim()) { toast.notify('コピーする内容が空です', 'error'); return }
     try {
       await navigator.clipboard.writeText(editorText)
-      notify('クリップボードにコピーしました')
+      toast.notify('クリップボードにコピーしました')
     } catch {
-      notify('コピーに失敗しました', 'error')
+      toast.notify('コピーに失敗しました', 'error')
     }
   }
 
@@ -110,11 +102,11 @@
   function openAdd() { formTime = ''; formName = ''; addModal = true }
 
   function saveAdd() {
-    if (!formTime || !formName) { notify('時間とタイトルを入力してください', 'error'); return }
-    if (!isValidTimeFormat(formTime)) { notify('時間は00:00:00の形式で入力してください', 'error'); return }
+    if (!formTime || !formName) { toast.notify('時間とタイトルを入力してください', 'error'); return }
+    if (!isValidTimeFormat(formTime)) { toast.notify('時間は00:00:00の形式で入力してください', 'error'); return }
     editorText = chaptersToString(sortChaptersByTime([...chapters, { time: formTime, name: formName }]))
     addModal = false
-    notify('チャプターを追加しました')
+    toast.notify('チャプターを追加しました')
   }
 
   // ---- chapter edit ----
@@ -126,13 +118,13 @@
   }
 
   function saveEdit() {
-    if (!formTime || !formName) { notify('時間とタイトルを入力してください', 'error'); return }
-    if (!isValidTimeFormat(formTime)) { notify('時間は00:00:00の形式で入力してください', 'error'); return }
+    if (!formTime || !formName) { toast.notify('時間とタイトルを入力してください', 'error'); return }
+    if (!isValidTimeFormat(formTime)) { toast.notify('時間は00:00:00の形式で入力してください', 'error'); return }
     const updated = [...chapters]
     updated[editIndex] = { time: formTime, name: formName }
     editorText = chaptersToString(sortChaptersByTime(updated))
     editModal = false
-    notify('チャプターを更新しました')
+    toast.notify('チャプターを更新しました')
   }
 
   // ---- chapter delete ----
@@ -142,7 +134,7 @@
     const updated = [...chapters]
     updated.splice(idx, 1)
     editorText = chaptersToString(updated)
-    notify('チャプターを削除しました')
+    toast.notify('チャプターを削除しました')
   }
 
   // ---- keyboard shortcuts ----
@@ -161,15 +153,7 @@
 
 <div class="flex flex-col gap-6">
 
-  <!-- メッセージ -->
-  {#if message}
-    <div class="msg-animate px-4 py-3 rounded-2xl text-sm font-medium border
-      {message.type === 'success'
-        ? 'bg-[var(--success-bg)] text-[var(--success-text)] border-[var(--success-border)]'
-        : 'bg-[var(--error-bg)] text-[var(--error-text)] border-[var(--error-border)]'}">
-      {message.text}
-    </div>
-  {/if}
+  <Toast />
 
   <!-- ファイルアップロード -->
   <section>

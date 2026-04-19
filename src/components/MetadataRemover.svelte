@@ -1,6 +1,7 @@
 <script lang="ts">
   import FileDropZone from './FileDropZone.svelte'
   import { processImage } from '@/lib/metadata/client-processor'
+  import { formatSize, triggerDownload } from '@/lib/utils'
 
   interface FileResult {
     name: string
@@ -13,12 +14,6 @@
 
   let files = $state<FileResult[]>([])
   let processing = $state(false)
-
-  function formatSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
 
   function handleFiles(newFiles: File[]) {
     const added = newFiles.map((f) => ({
@@ -47,12 +42,7 @@
 
   function downloadOne(file: FileResult) {
     if (!file.blob) return
-    const url = URL.createObjectURL(file.blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `cleaned_${file.name}`
-    a.click()
-    URL.revokeObjectURL(url)
+    triggerDownload(file.blob, `cleaned_${file.name}`)
   }
 
   function downloadAll() {

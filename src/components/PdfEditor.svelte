@@ -5,6 +5,8 @@
     type SourcePdf, type PageDescriptor,
     getPageSizes, buildPdf, splitPdf, downloadBytes,
   } from '@/lib/pdf/pdf-engine'
+  import PdfPreviewModal from './PdfPreviewModal.svelte'
+  import PdfSplitModal   from './PdfSplitModal.svelte'
 
   // ─── Global state ────────────────────────────────────────────────────────
   let fileLoaded   = $state(false)
@@ -37,10 +39,7 @@
   }
 
   // ─── Renderer init (ブラウザのみ) ─────────────────────────────────────
-  let rendererReady = $state(false)
-  $effect(() => {
-    initRenderer().then(() => { rendererReady = true })
-  })
+  $effect(() => { initRenderer() })
 
   // ─── Load PDF ────────────────────────────────────────────────────────────
   async function loadFile(file: File | undefined | null) {
@@ -297,80 +296,9 @@
   )
 
   // ─── Preview ─────────────────────────────────────────────────────────────
-  let previewIndex  = $state<number | null>(null)
-  let zoom          = $state(1.0)
-  let overlayEl     = $state<HTMLDivElement | null>(null)
-  let isDragging    = $state(false)
-  let showControls  = $state(false)
-  let hasDragged    = false
-  let dragStart     = { x: 0, y: 0, scrollLeft: 0, scrollTop: 0 }
+  let previewIndex = $state<number | null>(null)
 
-  const ZOOM_MIN  = 0.5
-  const ZOOM_MAX  = 3.0
-  const ZOOM_STEP = 0.25
-
-  function resetView() {
-    zoom = 1.0
-    if (overlayEl) { overlayEl.scrollLeft = 0; overlayEl.scrollTop = 0 }
-  }
-  function openPreview(i: number) {
-    previewIndex = i; resetView(); showControls = true
-    const p = pages[i]
-    if (p) { ensureRotatedThumb(p); ensurePreviewThumb(p) }
-  }
-  function closePreview() { previewIndex = null }
-  function prevPage() {
-    if (previewIndex !== null && previewIndex > 0) {
-      previewIndex--; resetView()
-      const p = pages[previewIndex]; if (p) { ensureRotatedThumb(p); ensurePreviewThumb(p) }
-    }
-  }
-  function nextPage() {
-    if (previewIndex !== null && previewIndex < pageCount - 1) {
-      previewIndex++; resetView()
-      const p = pages[previewIndex]; if (p) { ensureRotatedThumb(p); ensurePreviewThumb(p) }
-    }
-  }
-
-  function zoomIn()  { zoom = Math.min(ZOOM_MAX, +(zoom + ZOOM_STEP).toFixed(2)) }
-  function zoomOut() { zoom = Math.max(ZOOM_MIN, +(zoom - ZOOM_STEP).toFixed(2)) }
-
-  function onOverlayMousedown(e: MouseEvent) {
-    if ((e.target as Element).closest('button')) return
-    isDragging = true; hasDragged = false
-    dragStart  = { x: e.clientX, y: e.clientY, scrollLeft: overlayEl!.scrollLeft, scrollTop: overlayEl!.scrollTop }
-    e.preventDefault()
-  }
-  function onOverlayMousemove(e: MouseEvent) {
-    if (!isDragging || !overlayEl) return
-    const dx = e.clientX - dragStart.x
-    const dy = e.clientY - dragStart.y
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasDragged = true
-    overlayEl.scrollLeft = dragStart.scrollLeft - dx
-    overlayEl.scrollTop  = dragStart.scrollTop  - dy
-  }
-  function onOverlayMouseup(e: MouseEvent) {
-    isDragging = false
-    if (!hasDragged && e.target === overlayEl) closePreview()
-  }
-  function onOverlayMouseleave() { isDragging = false; showControls = false }
-  function onOverlayTouchstart()  { showControls = true }
-
-  function onPreviewKeydown(e: KeyboardEvent) {
-    if      (e.key === 'Escape')             closePreview()
-    else if (e.key === '+' || e.key === '=') zoomIn()
-    else if (e.key === '-')                  zoomOut()
-    else if (e.key === '0')                  resetView()
-    else if (e.key === 'ArrowLeft')          prevPage()
-    else if (e.key === 'ArrowRight')         nextPage()
-  }
-
-  // プレビューが開いたら overlay にフォーカスしてキーボードショートカットを有効化
-  $effect(() => {
-    if (previewIndex !== null && overlayEl) {
-      overlayEl.focus()
-    }
-  })
+  function openPreview(i: number) { previewIndex = i }
 </script>
 
 <!-- ──────────────────────────────────────────────────────────────────────── -->
@@ -583,225 +511,26 @@
 
 {/if}
 
-<!-- ──────────────────────────────────────────────────────────────────────── -->
-<!-- Preview Modal                                                             -->
-<!-- ──────────────────────────────────────────────────────────────────────── -->
-{#if previewIndex !== null}
-  {@const page = pages[previewIndex]}
-  <div
-    bind:this={overlayEl}
-    class="fixed inset-0 bg-black/70 overflow-auto z-50
-           {isDragging ? 'cursor-grabbing' : zoom > 1 ? 'cursor-grab' : 'cursor-default'}"
-    onmouseenter={() => showControls = true}
-    onmousedown={onOverlayMousedown}
-    onmousemove={onOverlayMousemove}
-    onmouseup={onOverlayMouseup}
-    onmouseleave={onOverlayMouseleave}
-    ontouchstart={onOverlayTouchstart}
-    onkeydown={onPreviewKeydown}
-    role="dialog"
-    aria-modal="true"
-    aria-label="ページ拡大表示"
-    tabindex={-1}
-  >
-    <!-- Prev button -->
-    <button
-      class="btn-icon fixed left-4 top-1/2 -translate-y-1/2 bg-(--surface-container) shadow-(--elev-2) z-60 disabled:opacity-30 transition-opacity duration-200
-             {showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}"
-      onclick={prevPage}
-      disabled={previewIndex === 0}
-      aria-label="前のページ"
-    >
-      <i class="fas fa-chevron-left"></i>
-    </button>
+<PdfPreviewModal
+  {pages}
+  {pageCount}
+  {thumbnails}
+  {previewThumbs}
+  bind:previewIndex
+  {getAspectRatio}
+  {thumbKey}
+  {previewThumbKey}
+  {ensurePreviewThumb}
+  {ensureRotatedThumb}
+/>
 
-    <!-- Page display -->
-    <div class="min-h-full flex items-center justify-center py-4 px-20">
-      <div
-        class="rounded-xl shadow-(--elev-3) select-none overflow-hidden"
-        style="height: calc(90svh * {zoom}); aspect-ratio: {getAspectRatio(page)};"
-      >
-        {#if previewThumbs.has(previewThumbKey(page))}
-          <!-- 高解像度版（生成完了後に差し替え） -->
-          <img
-            src={previewThumbs.get(previewThumbKey(page))}
-            alt="ページ {previewIndex + 1}"
-            class="w-full h-full object-contain bg-white"
-          />
-        {:else if thumbnails.has(thumbKey(page))}
-          <!-- 低解像度版（暫定表示） -->
-          <img
-            src={thumbnails.get(thumbKey(page))}
-            alt="ページ {previewIndex + 1}"
-            class="w-full h-full object-contain bg-white"
-          />
-        {:else if thumbnails.has(`${page.sourceId}:${page.srcIndex}:0`)}
-          <img
-            src={thumbnails.get(`${page.sourceId}:${page.srcIndex}:0`)}
-            alt="ページ {previewIndex + 1}"
-            class="w-full h-full object-contain bg-white"
-            style="transform: rotate({page.rotation}deg); transform-origin: center;"
-          />
-        {:else}
-          <div class="w-full h-full flex items-center justify-center bg-white">
-            <i class="fas fa-file-pdf text-4xl text-[var(--text-muted)] opacity-30 animate-pulse"></i>
-          </div>
-        {/if}
-      </div>
-    </div>
-
-    <!-- Header: page counter + close (fixed top) -->
-    <div
-      class="fixed top-4 left-1/2 -translate-x-1/2 z-60 flex items-center gap-3 bg-black/50 backdrop-blur-sm rounded-full px-4 py-2 text-white transition-opacity duration-200
-             {showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}"
-    >
-      <span class="text-sm font-mono">{previewIndex + 1} / {pageCount}</span>
-      <button
-        class="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white/20 transition-colors"
-        onclick={closePreview}
-        aria-label="閉じる"
-      >
-        <i class="fas fa-times text-xs"></i>
-      </button>
-    </div>
-
-    <!-- Zoom controls (fixed at bottom) -->
-    <div
-      class="fixed bottom-6 left-1/2 -translate-x-1/2 z-60 flex flex-col items-center gap-1.5 transition-opacity duration-200
-             {showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}"
-    >
-      <div class="flex items-center gap-1 bg-black/60 rounded-full px-3 py-1.5 backdrop-blur-sm">
-        <button
-          class="w-7 h-7 rounded-full flex items-center justify-center text-white hover:bg-white/20 transition-colors disabled:opacity-30"
-          onclick={zoomOut}
-          disabled={zoom <= ZOOM_MIN}
-          aria-label="縮小"
-        >
-          <i class="fas fa-minus text-xs"></i>
-        </button>
-        <button
-          class="text-xs text-white font-mono w-12 text-center hover:text-white/70 transition-colors"
-          onclick={resetView}
-          title="クリックで 100% にリセット"
-        >
-          {Math.round(zoom * 100)}%
-        </button>
-        <button
-          class="w-7 h-7 rounded-full flex items-center justify-center text-white hover:bg-white/20 transition-colors disabled:opacity-30"
-          onclick={zoomIn}
-          disabled={zoom >= ZOOM_MAX}
-          aria-label="拡大"
-        >
-          <i class="fas fa-plus text-xs"></i>
-        </button>
-      </div>
-      <p class="text-white/40 text-xs">← → ページ移動　± ズーム　0 でリセット　ドラッグで移動　Esc で閉じる</p>
-    </div>
-
-    <!-- Next button -->
-    <button
-      class="btn-icon fixed right-4 top-1/2 -translate-y-1/2 bg-(--surface-container) shadow-(--elev-2) z-60 disabled:opacity-30 transition-opacity duration-200
-             {showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}"
-      onclick={nextPage}
-      disabled={previewIndex === pageCount - 1}
-      aria-label="次のページ"
-    >
-      <i class="fas fa-chevron-right"></i>
-    </button>
-  </div>
-{/if}
-
-<!-- ──────────────────────────────────────────────────────────────────────── -->
-<!-- Split Modal                                                               -->
-<!-- ──────────────────────────────────────────────────────────────────────── -->
 {#if showSplit}
-  <div
-    class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
-    onclick={(e) => { if (e.target === e.currentTarget) showSplit = false }}
-    onkeydown={(e) => { if (e.key === 'Escape') showSplit = false }}
-    role="dialog"
-    aria-modal="true"
-    aria-label="PDFを分割"
-    tabindex={-1}
-  >
-    <div class="bg-[var(--surface-container)] rounded-2xl shadow-[var(--elev-3)] w-full max-w-lg">
-
-      <!-- Modal header -->
-      <div class="flex items-center justify-between p-5 border-b border-[var(--outline-variant)]">
-        <div>
-          <h2 class="text-base font-semibold">PDFを分割</h2>
-          <p class="text-xs text-[var(--text-muted)] mt-0.5">区切り線をクリックして分割位置を指定</p>
-        </div>
-        <button class="btn-icon" onclick={() => showSplit = false} aria-label="閉じる">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-
-      <!-- Page selector -->
-      <div class="p-5">
-        <div class="relative">
-        <div class="flex items-stretch gap-0 overflow-x-auto pb-2">
-          {#each pages as page, i (page.id)}
-            <!-- Page box -->
-            <div class="flex-shrink-0 flex flex-col items-center gap-1">
-              <div
-                class="w-9 h-12 rounded border-2 flex items-center justify-center font-mono text-[11px] font-bold transition-all duration-150
-                       {i < splitAt
-                         ? 'bg-[var(--color-primary-light)] border-[var(--color-primary)] text-[var(--color-primary)]'
-                         : 'bg-white border-[var(--outline-variant)] text-[var(--text-muted)]'}"
-              >
-                {i + 1}
-              </div>
-            </div>
-
-            <!-- Divider button (between pages) -->
-            {#if i < pages.length - 1}
-              <button
-                class="flex-shrink-0 flex items-center justify-center w-5 h-12 group relative"
-                onclick={() => splitAt = i + 1}
-                title="ページ {i + 1} と {i + 2} の間で分割"
-              >
-                <div
-                  class="rounded-full transition-all duration-150
-                         {splitAt === i + 1
-                           ? 'w-1 h-full bg-[var(--color-primary)]'
-                           : 'w-px h-full bg-[var(--outline-variant)] group-hover:w-1 group-hover:bg-[var(--color-primary)]'}"
-                ></div>
-              </button>
-            {/if}
-          {/each}
-        </div>
-        <!-- Right fade: scroll hint -->
-        <div class="absolute right-0 top-0 bottom-2 w-10 bg-gradient-to-l from-[var(--surface-container)] to-transparent pointer-events-none"></div>
-        </div>
-
-        <!-- Legend -->
-        <div class="flex gap-4 text-xs mt-3">
-          <span class="flex items-center gap-1.5">
-            <span class="w-3 h-3 rounded-sm border-2 border-[var(--color-primary)] bg-[var(--color-primary-light)] inline-block"></span>
-            <span class="text-[var(--text-muted)]">ファイル 1（{splitAt} ページ）</span>
-          </span>
-          <span class="flex items-center gap-1.5">
-            <span class="w-3 h-3 rounded-sm border-2 border-[var(--outline-variant)] bg-white inline-block"></span>
-            <span class="text-[var(--text-muted)]">ファイル 2（{pageCount - splitAt} ページ）</span>
-          </span>
-        </div>
-
-        <p class="text-sm font-medium text-[var(--on-surface)] mt-3">{splitLabel}</p>
-      </div>
-
-      <!-- Modal footer -->
-      <div class="flex justify-end gap-2 p-5 pt-0">
-        <button class="btn-outlined" onclick={() => showSplit = false}>キャンセル</button>
-        <button
-          class="btn-filled"
-          onclick={handleSplit}
-          disabled={splitAt <= 0 || splitAt >= pageCount}
-        >
-          <i class="fas fa-scissors"></i>分割してDL
-        </button>
-      </div>
-
-    </div>
-  </div>
+  <PdfSplitModal
+    {pages}
+    {pageCount}
+    bind:splitAt
+    {splitLabel}
+    onclose={() => showSplit = false}
+    onconfirm={handleSplit}
+  />
 {/if}

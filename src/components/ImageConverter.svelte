@@ -1,5 +1,8 @@
 <script lang="ts">
   import FileDropZone from './FileDropZone.svelte'
+  import Toast from './Toast.svelte'
+  import { toast } from '@/lib/toast.svelte'
+  import { formatSize, triggerDownload } from '@/lib/utils'
   import {
     initVips, convertImage,
     DEFAULT_OPTIONS,
@@ -42,8 +45,6 @@
   let entries    = $state<FileEntry[]>([])
   let vipsLoading = $state(false)
   let vipsReady   = $state(false)
-  let message     = $state<{ text: string; type: 'success' | 'error' } | null>(null)
-  let msgTimer    = $state<ReturnType<typeof setTimeout> | null>(null)
 
   // プリセット保存UI
   let showPresetInput = $state(false)
@@ -86,18 +87,6 @@
   ]
 
   // ─── ユーティリティ ──────────────────────────────────────────
-  function notify(text: string, type: 'success' | 'error' = 'success') {
-    if (msgTimer) clearTimeout(msgTimer)
-    message = { text, type }
-    msgTimer = setTimeout(() => { message = null }, 5000)
-  }
-
-  function formatSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
-
   function sizeRatio(original: number, converted: number): string {
     const ratio = converted / original
     if (ratio < 1) return `▼ ${((1 - ratio) * 100).toFixed(0)}%`
@@ -116,7 +105,7 @@
       await initVips()
       vipsReady = true
     } catch (e) {
-      notify(`wasm-vips の初期化に失敗しました: ${(e as Error).message}`, 'error')
+      toast.notify(`wasm-vips の初期化に失敗しました: ${(e as Error).message}`, 'error')
       throw e
     } finally {
       vipsLoading = false
@@ -130,7 +119,7 @@
 
   async function convertAll() {
     const pending = entries.filter((e) => e.status === 'pending' || e.status === 'error')
-    if (pending.length === 0) { notify('変換するファイルがありません', 'error'); return }
+    if (pending.length === 0) { toast.notify('変換するファイルがありません', 'error'); return }
 
     try { await ensureVips() } catch { return }
 
@@ -146,15 +135,12 @@
     }
 
     const doneCount = entries.filter((e) => e.status === 'done').length
-    notify(`${doneCount} 件の変換が完了しました`)
+    toast.notify(`${doneCount} 件の変換が完了しました`)
   }
 
   function downloadOne(entry: FileEntry) {
     if (!entry.result) return
-    const url = URL.createObjectURL(entry.result.blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = entry.result.filename; a.click()
-    URL.revokeObjectURL(url)
+    triggerDownload(entry.result.blob, entry.result.filename)
   }
 
   function downloadAll() {
@@ -195,7 +181,7 @@
     savePresetsToStorage(presets)
     showPresetInput = false
     presetName = ''
-    notify(`プリセット「${name}」を保存しました`)
+    toast.notify(`プリセット「${name}」を保存しました`)
   }
 
   function deletePreset(id: string) {
@@ -220,15 +206,7 @@
 
 <div class="flex flex-col gap-5">
 
-  <!-- メッセージ -->
-  {#if message}
-    <div class="msg-animate px-4 py-3 rounded-2xl text-sm font-medium border
-      {message.type === 'success'
-        ? 'bg-[var(--success-bg)] text-[var(--success-text)] border-[var(--success-border)]'
-        : 'bg-[var(--error-bg)] text-[var(--error-text)] border-[var(--error-border)]'}">
-      {message.text}
-    </div>
-  {/if}
+  <Toast />
 
   <!-- ファイル選択 -->
   <FileDropZone

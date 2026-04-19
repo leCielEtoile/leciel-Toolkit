@@ -226,6 +226,10 @@ body {
   background: var(--color-primary-light);
   border-color: var(--color-primary);
 }
+.btn-outlined:disabled {
+  opacity: .38;
+  cursor: not-allowed;
+}
 
 /* -------------------------------------------------- */
 /* M3 Text Button                                      */
