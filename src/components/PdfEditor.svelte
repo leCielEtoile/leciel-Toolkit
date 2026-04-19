@@ -66,6 +66,7 @@
       showSplit     = false
       thumbnails    = new Map()
       previewThumbs = new Map()
+      pdfDocs       = new Map()   // 前回の PDF ドキュメントキャッシュをクリア
 
       await renderAllThumbnails(srcId, bytes, count)
     } finally {
@@ -363,6 +364,13 @@
     else if (e.key === 'ArrowLeft')          prevPage()
     else if (e.key === 'ArrowRight')         nextPage()
   }
+
+  // プレビューが開いたら overlay にフォーカスしてキーボードショートカットを有効化
+  $effect(() => {
+    if (previewIndex !== null && overlayEl) {
+      overlayEl.focus()
+    }
+  })
 </script>
 
 <!-- ──────────────────────────────────────────────────────────────────────── -->
