@@ -141,20 +141,34 @@ export async function convertFile(
   const is2Pass = opts.rateControlMode === '2pass' && !opts.audioOnly && opts.videoCodec !== 'copy'
   let passOffset = 0
 
-  const progressHandler = ({ ratio }: { ratio: number }) => {
-    if (!Number.isFinite(ratio) || ratio < 0) return
-    const scaled = is2Pass
-      ? passOffset + Math.max(0, Math.min(0.5, ratio * 0.5))
-      : Math.max(0, Math.min(1, ratio))
-    onProgress?.(scaled)
-  }
-
   const logLines: string[] = []
+  let totalDuration: number | null = null
+
   const logHandler = ({ message }: { message: string }) => {
     logLines.push(message)
+
+    // 入力ファイルの総時間を取得 (トリム設定を反映)
+    if (totalDuration === null) {
+      const m = message.match(/Duration:\s*(\d+):(\d+):(\d+\.?\d*)/)
+      if (m) {
+        const raw = +m[1] * 3600 + +m[2] * 60 + +m[3]
+        const start = opts.startTime ?? 0
+        const end   = opts.endTime   ?? raw
+        totalDuration = Math.max(0.001, end - start)
+      }
+    }
+
+    // エンコード進捗行から現在時刻を取得して進捗を計算
+    if (totalDuration) {
+      const m = message.match(/time=(\d+):(\d+):(\d+\.?\d*)/)
+      if (m) {
+        const cur   = +m[1] * 3600 + +m[2] * 60 + +m[3]
+        const ratio = Math.max(0, Math.min(1, cur / totalDuration))
+        onProgress?.(is2Pass ? passOffset + ratio * 0.5 : ratio)
+      }
+    }
   }
 
-  ff.on('progress', progressHandler)
   ff.on('log', logHandler)
 
   try {
@@ -187,7 +201,6 @@ export async function convertFile(
     new Uint8Array(buf).set(raw)
     return new Blob([buf], { type: MIME_MAP[opts.outputFormat] ?? 'application/octet-stream' })
   } finally {
-    ff.off('progress', progressHandler)
     ff.off('log', logHandler)
     // 仮想 FS のクリーンアップ
     await ff.deleteFile(inputName).catch(() => {})
