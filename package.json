@@ -16,6 +16,7 @@
     "pdfjs-dist": "^5.6.205",
     "svelte": "^5.0.0",
     "tailwindcss": "^4.0.0",
+    "tesseract.js": "^7.0.0",
     "wasm-vips": "^0.0.17"
   },
   "devDependencies": {

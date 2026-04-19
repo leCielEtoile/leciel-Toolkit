@@ -18,7 +18,7 @@ Static browser-only tool collection. No server-side processing. All tools run 10
 | Package manager | pnpm |
 | Hosting | Cloudflare Pages |
 
-Key libraries: `pdf-lib`, `pdfjs-dist`, `wasm-vips` (image conversion via WASM)
+Key libraries: `pdf-lib`, `pdfjs-dist`, `wasm-vips` (image conversion via WASM), `tesseract.js` (OCR via WASM)
 
 ## Directory Map
 ```
@@ -31,6 +31,7 @@ src/
       metadata-remover/index.astro
       qr-reader/index.astro
       chapter-converter/index.astro
+      ocr/index.astro
   components/                    # Svelte UI components (one per tool + shared)
     Header.svelte
     Toast.svelte
@@ -43,6 +44,7 @@ src/
     MetadataRemover.svelte
     QrReader.svelte
     ChapterConverter.svelte
+    OcrTool.svelte
     ToolInfo.astro               # Shared tool description block
   layouts/
     ToolLayout.astro             # Shared layout for all tool pages
@@ -54,6 +56,8 @@ src/
       pdf-renderer.ts            # pdfjs-dist rendering / thumbnails
     image-converter/
       converter.ts               # wasm-vips image format conversion
+    ocr/
+      ocr-engine.ts              # tesseract.js Worker management / OCR logic
     metadata/
       client-processor.ts        # EXIF/IPTC/XMP strip logic
     chapter/
@@ -73,6 +77,7 @@ astro.config.ts                  # Vite plugins: wasm, tailwind, COEP/COOP heade
 | `/tools/metadata-remover` | `MetadataRemover.svelte` | Canvas API |
 | `/tools/qr-reader` | `QrReader.svelte` | Camera API, Canvas |
 | `/tools/chapter-converter` | `ChapterConverter.svelte` | Custom parsers |
+| `/tools/ocr` | `OcrTool.svelte` | tesseract.js (WASM) |
 
 ## Architecture Patterns
 - **Pages** = thin shells; mount a single Svelte component with `client:load`
