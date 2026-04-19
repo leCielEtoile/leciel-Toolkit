@@ -27,6 +27,10 @@ self.addEventListener('fetch', (e) => {
   // ffmpeg-core-mt pthread sub-workers from loading, causing encoding to hang.
   if (url.protocol === 'blob:') return
 
+  // Cloudflare internal endpoints (/cdn-cgi/*) must not be intercepted —
+  // doing so causes RUM beacons and challenge scripts to fail with ERR_FAILED.
+  if (url.pathname.startsWith('/cdn-cgi/')) return
+
   const isSameOrigin = url.origin === self.location.origin
   const isNavigation = e.request.mode === 'navigate'
 
