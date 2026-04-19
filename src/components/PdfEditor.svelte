@@ -3,7 +3,7 @@
   import { initRenderer, openDocument, renderPageToDataUrl } from '@/lib/pdf/pdf-renderer'
   import {
     type SourcePdf, type PageDescriptor,
-    getPageCount, buildPdf, splitPdf, downloadBytes,
+    getPageSizes, buildPdf, splitPdf, downloadBytes,
   } from '@/lib/pdf/pdf-engine'
 
   // ─── Global state ────────────────────────────────────────────────────────
@@ -52,9 +52,11 @@
       const srcId   = 'src-0'
       sources       = new Map([[srcId, { id: srcId, bytes }]])
 
-      const count   = await getPageCount(bytes)
-      pages         = Array.from({ length: count }, (_, i) => ({
+      const sizes   = await getPageSizes(bytes)
+      const count   = sizes.length
+      pages         = sizes.map((s, i) => ({
         id: nextId(), sourceId: srcId, srcIndex: i, rotation: 0,
+        width: s.width, height: s.height,
       }))
       splitAt       = Math.max(1, Math.floor(count / 2))
       fileName      = file.name
@@ -63,6 +65,7 @@
       showMerge     = false
       showSplit     = false
       thumbnails    = new Map()
+      previewThumbs = new Map()
 
       await renderAllThumbnails(srcId, bytes, count)
     } finally {
@@ -78,11 +81,54 @@
     const doc = pdfDocs.get(srcId)!
     for (let i = 0; i < count; i++) {
       loadingMsg = `サムネイルを生成中… ${i + 1} / ${count}`
-      const url  = await renderPageToDataUrl(doc, i, 200)
-      // rotation 0 のキャッシュを格納（回転は各 rotation ごとにキャッシュ）
+      // デフォルト 400px（pdf-renderer.ts の default 値を使用）
+      const url  = await renderPageToDataUrl(doc, i)
       thumbnails = new Map(thumbnails).set(`${srcId}:${i}:0`, url)
     }
     loadingMsg = ''
+  }
+
+  // ─── アスペクト比ヘルパー ────────────────────────────────────────────────
+  function getAspectRatio(p: PageDescriptor): string {
+    // p.rotation は追加回転。90/270 の場合は幅・高さが入れ替わる
+    const swapped = p.rotation === 90 || p.rotation === 270
+    const w = swapped ? p.height : p.width
+    const h = swapped ? p.width  : p.height
+    return `${w} / ${h}`
+  }
+
+  // ─── プレビュー高解像度サムネイル ───────────────────────────────────────
+  let previewThumbs = $state<Map<string, string>>(new Map())
+
+  function previewThumbKey(p: PageDescriptor) {
+    return `${p.sourceId}:${p.srcIndex}:${p.rotation}:hd`
+  }
+
+  async function ensurePreviewThumb(p: PageDescriptor) {
+    const key = previewThumbKey(p)
+    if (previewThumbs.has(key)) return
+    if (!pdfDocs.has(p.sourceId)) return
+
+    const doc    = pdfDocs.get(p.sourceId)!
+    const base   = await renderPageToDataUrl(doc, p.srcIndex, 1200)
+
+    if (p.rotation === 0) {
+      previewThumbs = new Map(previewThumbs).set(key, base)
+      return
+    }
+    // 回転を canvas で適用
+    const img  = await loadImage(base)
+    const { width: w, height: h } = img
+    const swap = p.rotation === 90 || p.rotation === 270
+    const cw = swap ? h : w
+    const ch = swap ? w : h
+    const canvas = document.createElement('canvas')
+    canvas.width = cw; canvas.height = ch
+    const ctx = canvas.getContext('2d')!
+    ctx.translate(cw / 2, ch / 2)
+    ctx.rotate((p.rotation * Math.PI) / 180)
+    ctx.drawImage(img, -w / 2, -h / 2)
+    previewThumbs = new Map(previewThumbs).set(key, canvas.toDataURL('image/jpeg', 0.92))
   }
 
   /** 回転したサムネイルをキャッシュ（まだなければレンダリング） */
@@ -200,9 +246,11 @@
       const srcId  = `src-${sources.size}`
       sources      = new Map(sources).set(srcId, { id: srcId, bytes })
 
-      const count  = await getPageCount(bytes)
-      const newPages: PageDescriptor[] = Array.from({ length: count }, (_, i) => ({
+      const sizes  = await getPageSizes(bytes)
+      const count  = sizes.length
+      const newPages: PageDescriptor[] = sizes.map((s, i) => ({
         id: nextId(), sourceId: srcId, srcIndex: i, rotation: 0,
+        width: s.width, height: s.height,
       }))
       pages     = [...pages, ...newPages]
       showMerge = false
@@ -266,13 +314,22 @@
   }
   function openPreview(i: number) {
     previewIndex = i; resetView(); showControls = true
-    // プレビュー表示時に回転済みサムネイルを確保
     const p = pages[i]
-    if (p) ensureRotatedThumb(p)
+    if (p) { ensureRotatedThumb(p); ensurePreviewThumb(p) }
   }
-  function closePreview()  { previewIndex = null }
-  function prevPage() { if (previewIndex !== null && previewIndex > 0) { previewIndex--; resetView(); const p = pages[previewIndex]; if (p) ensureRotatedThumb(p) } }
-  function nextPage() { if (previewIndex !== null && previewIndex < pageCount - 1) { previewIndex++; resetView(); const p = pages[previewIndex]; if (p) ensureRotatedThumb(p) } }
+  function closePreview() { previewIndex = null }
+  function prevPage() {
+    if (previewIndex !== null && previewIndex > 0) {
+      previewIndex--; resetView()
+      const p = pages[previewIndex]; if (p) { ensureRotatedThumb(p); ensurePreviewThumb(p) }
+    }
+  }
+  function nextPage() {
+    if (previewIndex !== null && previewIndex < pageCount - 1) {
+      previewIndex++; resetView()
+      const p = pages[previewIndex]; if (p) { ensureRotatedThumb(p); ensurePreviewThumb(p) }
+    }
+  }
 
   function zoomIn()  { zoom = Math.min(ZOOM_MAX, +(zoom + ZOOM_STEP).toFixed(2)) }
   function zoomOut() { zoom = Math.max(ZOOM_MIN, +(zoom - ZOOM_STEP).toFixed(2)) }
@@ -455,7 +512,7 @@
         {/if}
 
         <!-- Thumbnail -->
-        <div class="aspect-[210/297] bg-[var(--surface-container)] relative overflow-hidden">
+        <div class="bg-(--surface-container) relative overflow-hidden" style="aspect-ratio: {getAspectRatio(page)};">
           {#if thumbnails.has(thumbKey(page))}
             <img
               src={thumbnails.get(thumbKey(page))}
@@ -554,9 +611,17 @@
     <div class="min-h-full flex items-center justify-center py-4 px-20">
       <div
         class="rounded-xl shadow-(--elev-3) select-none overflow-hidden"
-        style="height: calc(90svh * {zoom}); aspect-ratio: 210/297;"
+        style="height: calc(90svh * {zoom}); aspect-ratio: {getAspectRatio(page)};"
       >
-        {#if thumbnails.has(thumbKey(page))}
+        {#if previewThumbs.has(previewThumbKey(page))}
+          <!-- 高解像度版（生成完了後に差し替え） -->
+          <img
+            src={previewThumbs.get(previewThumbKey(page))}
+            alt="ページ {previewIndex + 1}"
+            class="w-full h-full object-contain bg-white"
+          />
+        {:else if thumbnails.has(thumbKey(page))}
+          <!-- 低解像度版（暫定表示） -->
           <img
             src={thumbnails.get(thumbKey(page))}
             alt="ページ {previewIndex + 1}"

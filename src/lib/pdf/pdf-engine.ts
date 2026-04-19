@@ -10,12 +10,26 @@ export interface PageDescriptor {
   sourceId: string     // ソースPDFのID
   srcIndex: number     // ソース内ページ番号（0始まり）
   rotation: number     // 追加回転（0 / 90 / 180 / 270）
+  width: number        // PDFページの視覚幅（PDF内回転適用済み）
+  height: number       // PDFページの視覚高さ
 }
 
-/** PDF バイト列を読み込んでページ数を返す */
-export async function getPageCount(bytes: Uint8Array): Promise<number> {
+/**
+ * PDF バイト列の全ページの視覚サイズを返す。
+ * PDF に埋め込まれた回転を考慮した幅・高さを返す。
+ */
+export async function getPageSizes(
+  bytes: Uint8Array,
+): Promise<{ width: number; height: number }[]> {
   const doc = await PDFDocument.load(bytes, { ignoreEncryption: true })
-  return doc.getPageCount()
+  return doc.getPages().map(page => {
+    const { width, height } = page.getSize()
+    const rot = ((page.getRotation().angle % 360) + 360) % 360
+    // 90° / 270° 回転が埋め込まれている場合は幅・高さを入れ替える
+    return rot === 90 || rot === 270
+      ? { width: height, height: width }
+      : { width, height }
+  })
 }
 
 /**

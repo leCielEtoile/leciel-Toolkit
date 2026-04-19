@@ -36,7 +36,7 @@ export async function openDocument(bytes: Uint8Array): Promise<PDFDocumentProxy>
 export async function renderPageToDataUrl(
   doc: PDFDocumentProxy,
   pageIndex: number,
-  targetWidth = 200,
+  targetWidth = 400,
 ): Promise<string> {
   const page     = await doc.getPage(pageIndex + 1)       // pdfjs は 1 始まり
   const viewport = page.getViewport({ scale: 1 })
