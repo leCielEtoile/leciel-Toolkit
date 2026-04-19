@@ -1,0 +1,44 @@
+---
+import ToolLayout from '@/layouts/ToolLayout.astro'
+import VideoConverter from '@/components/VideoConverter.svelte'
+import ToolInfo from '@/components/ToolInfo.astro'
+---
+
+<ToolLayout
+  title="動画・音声変換ツール"
+  description="動画・音声ファイルをブラウザ上で変換・圧縮。MP4・WebM・MOV・MP3・WAV など主要フォーマットに対応"
+>
+  <!--
+    coi-serviceworker: SharedArrayBuffer が必要な FFmpeg WASM のために常時登録する。
+    _headers で COEP を付与しても /_astro/ のワーカースクリプト自体には
+    Cloudflare CDN キャッシュの都合で COEP が反映されない場合がある。
+    Service Worker がすべての同一オリジンレスポンスに COEP: credentialless を付与することで
+    ワーカースクリプトが cross-origin isolated になり ERR_BLOCKED_BY_RESPONSE を回避できる。
+    ※ crossOriginIsolated が既に true でも SW は登録し続ける。リロードは未適用時のみ。
+  -->
+  <script is:inline>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker
+        .register('/coi-serviceworker.js', { scope: '/tools/video-converter/' })
+        .then(() => { if (!crossOriginIsolated) window.location.reload() })
+    }
+  </script>
+
+  <VideoConverter client:load />
+
+  <ToolInfo
+    features={[
+      'MP4・WebM・MOV・AVI・MKV など主要動画フォーマット間で変換',
+      '音声抽出モード: 動画ファイルから MP3・WAV・AAC などの音声だけを取り出す',
+      'MP3・WAV・AAC・OGG・FLAC・M4A など音声フォーマット間の変換',
+      '動画品質 (CRF) と音声ビットレートを細かく調整可能',
+      'すべての処理はブラウザ上で完結。ファイルはサーバーに送信されません',
+    ]}
+    steps={[
+      '変換したい動画・音声ファイルをドロップゾーンにドラッグ＆ドロップ、またはクリックして選択します。',
+      '変換モード（動画変換・音声抽出・音声変換）と出力フォーマットを選択します。必要に応じて詳細設定で品質を調整します。',
+      '「変換」ボタンを押すと変換が開始されます。初回は FFmpeg ライブラリの読み込みに数秒かかります。',
+      '変換完了後にダウンロードボタンが表示されます。クリックしてファイルを保存してください。',
+    ]}
+  />
+</ToolLayout>

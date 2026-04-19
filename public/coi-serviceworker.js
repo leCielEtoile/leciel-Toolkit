@@ -21,6 +21,12 @@ self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()))
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url)
+
+  // blob: URLs are in-memory and cannot be modified with COEP headers.
+  // More importantly, letting the service worker intercept them blocks
+  // ffmpeg-core-mt pthread sub-workers from loading, causing encoding to hang.
+  if (url.protocol === 'blob:') return
+
   const isSameOrigin = url.origin === self.location.origin
   const isNavigation = e.request.mode === 'navigate'
 

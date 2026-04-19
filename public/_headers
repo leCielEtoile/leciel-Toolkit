@@ -1,3 +1,10 @@
+# /_astro/ の JS バンドルにも COEP を付与する。
+# @ffmpeg/ffmpeg と wasm-vips は Vite がワーカースクリプトを /_astro/ に出力するが、
+# COEP が有効なページからワーカーとして読み込む際に Chrome が COEP の不整合を検出し
+# ERR_BLOCKED_BY_RESPONSE でブロックするため、ワーカースクリプト側にも COEP が必要。
+/_astro/*
+  Cross-Origin-Embedder-Policy: credentialless
+
 /tools/image-converter/*
   Cross-Origin-Embedder-Policy: credentialless
   Cross-Origin-Opener-Policy: same-origin
