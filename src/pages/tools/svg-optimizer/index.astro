@@ -1,0 +1,28 @@
+---
+import ToolLayout from '@/layouts/ToolLayout.astro'
+import SvgOptimizer from '@/components/SvgOptimizer.svelte'
+import ToolInfo from '@/components/ToolInfo.astro'
+---
+
+<ToolLayout
+  title="SVG 最適化ツール"
+  description="SVGファイルを最適化してファイルサイズを削減するブラウザ完結型ツール。不要なメタデータや冗長なコードを除去します。"
+>
+  <SvgOptimizer client:load />
+
+  <ToolInfo
+    features={[
+      '不要なメタデータ・コメント・非表示要素を除去してファイルサイズを削減',
+      '最適化前後のファイルサイズと削減率をリアルタイム表示',
+      'SVGコードのプレビュー表示（最適化前後の比較）',
+      '複数ファイルの一括最適化に対応',
+      'すべての処理はブラウザ内で完結。ファイルがサーバーに送信されることはない',
+    ]}
+    steps={[
+      'SVGファイルをドロップゾーンにドラッグ＆ドロップ、またはクリックして選択します（複数選択可）。',
+      '「最適化」ボタンを押すと処理が開始されます。',
+      '最適化後のファイルサイズと削減率が表示されます。',
+      'ダウンロードボタンで最適化済みSVGを保存できます。複数ファイルの場合はZIPでまとめてダウンロードできます。',
+    ]}
+  />
+</ToolLayout>

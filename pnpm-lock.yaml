@@ -32,6 +32,9 @@ importers:
       svelte:
         specifier: ^5.0.0
         version: 5.55.0
+      svgo:
+        specifier: ^4.0.1
+        version: 4.0.1
       tailwindcss:
         specifier: ^4.0.0
         version: 4.2.2
