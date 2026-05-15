@@ -14,6 +14,7 @@
     "@ffmpeg/util": "^0.12.2",
     "@tailwindcss/vite": "^4.0.0",
     "astro": "^5.0.0",
+    "jszip": "^3.10.1",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^5.6.205",
     "svelte": "^5.0.0",
@@ -23,7 +24,9 @@
     "wasm-vips": "^0.0.17"
   },
   "devDependencies": {
+    "@types/jszip": "^3.4.1",
     "@types/node": "^22.0.0",
+    "playwright": "^1.60.0",
     "typescript": "^5.0.0",
     "vite-plugin-wasm": "^3.6.0"
   },

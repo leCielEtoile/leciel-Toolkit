@@ -24,8 +24,10 @@ export async function initRenderer(): Promise<void> {
 /** PDF バイト列から PDFDocumentProxy を取得 */
 export async function openDocument(bytes: Uint8Array): Promise<PDFDocumentProxy> {
   if (!pdfjs) await initRenderer()
+  // slice() でコピーを渡す。pdfjs は ArrayBuffer を worker に転送（detach）するため
+  // 呼び出し元の Uint8Array が無効化されないようにする。
   return pdfjs!.getDocument({
-    data: bytes,
+    data: bytes.slice(),
     cMapUrl: '/_astro/cmaps/',
     cMapPacked: true,
   }).promise

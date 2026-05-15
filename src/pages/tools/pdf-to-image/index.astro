@@ -1,0 +1,31 @@
+---
+import ToolLayout from '@/layouts/ToolLayout.astro'
+import PdfToImage from '@/components/PdfToImage.svelte'
+import ToolInfo from '@/components/ToolInfo.astro'
+---
+
+<ToolLayout
+  title="PDF画像変換ツール"
+  description="PDFをPNG・JPEG・WebP画像に変換。ページごとに保存または1枚にまとめてダウンロード。すべてブラウザ上で完結。"
+>
+  <PdfToImage client:load />
+
+  <ToolInfo
+    features={[
+      'PDFの全ページまたは指定範囲を画像に変換',
+      'ページごとに個別保存（複数ページはZIPでダウンロード）または全ページを1枚にまとめる',
+      'まとめる際は縦並び・横並びを選択可能',
+      '出力形式はPNG・JPEG・WebPから選択。JPEG/WebPは画質を細かく調整',
+      '解像度は低/中/高のプリセットまたはカスタム幅で指定',
+      '背景色は白・透明（PNG時）・カスタムカラーから選択',
+      'まとめる際のページ間余白・外側パディングを調整可能',
+      'すべての処理はブラウザ上で完結、ファイルはサーバーに送信しない',
+    ]}
+    steps={[
+      'PDFファイルをドロップゾーンにドラッグ＆ドロップするかクリックして選択します。',
+      'サムネイルでページ内容を確認します（最大20ページ表示）。',
+      '出力モード（ページごと保存 / 1枚にまとめる）、フォーマット、解像度などを設定します。',
+      '「変換してダウンロード」ボタンを押すと変換が始まり、完了次第ダウンロードされます。',
+    ]}
+  />
+</ToolLayout>

@@ -18,7 +18,7 @@ Static browser-only tool collection. No server-side processing. All tools run 10
 | Package manager | pnpm |
 | Hosting | Cloudflare Pages |
 
-Key libraries: `pdf-lib`, `pdfjs-dist`, `wasm-vips` (image conversion via WASM), `tesseract.js` (OCR via WASM)
+Key libraries: `pdf-lib`, `pdfjs-dist`, `wasm-vips` (image conversion via WASM), `tesseract.js` (OCR via WASM), `jszip` (ZIP archive generation)
 
 ## Directory Map
 ```
@@ -27,6 +27,7 @@ src/
     index.astro                  # Home — tool card list
     tools/
       pdf-editor/index.astro
+      pdf-to-image/index.astro
       image-converter/index.astro
       metadata-remover/index.astro
       qr-reader/index.astro
@@ -40,6 +41,7 @@ src/
     PdfEditor.svelte
     PdfPreviewModal.svelte
     PdfSplitModal.svelte
+    PdfToImage.svelte
     ImageConverter.svelte
     MetadataRemover.svelte
     QrReader.svelte
@@ -54,6 +56,7 @@ src/
     pdf/
       pdf-engine.ts              # pdf-lib operations (merge, split, rotate, delete)
       pdf-renderer.ts            # pdfjs-dist rendering / thumbnails
+      pdf-to-image.ts            # Canvas-based PDF→image conversion + ZIP packaging
     image-converter/
       converter.ts               # wasm-vips image format conversion
     ocr/
@@ -73,6 +76,7 @@ astro.config.ts                  # Vite plugins: wasm, tailwind, COEP/COOP heade
 | Route | Component | Key libs |
 |---|---|---|
 | `/tools/pdf-editor` | `PdfEditor.svelte` | pdf-lib, pdfjs-dist |
+| `/tools/pdf-to-image` | `PdfToImage.svelte` | pdfjs-dist, Canvas API, jszip |
 | `/tools/image-converter` | `ImageConverter.svelte` | wasm-vips (WASM, needs COEP/COOP) |
 | `/tools/metadata-remover` | `MetadataRemover.svelte` | Canvas API |
 | `/tools/qr-reader` | `QrReader.svelte` | Camera API, Canvas |
