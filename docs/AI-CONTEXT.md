@@ -66,6 +66,7 @@ src/
     chapter/
       parsers.ts                 # EDL / CSV / TXT marker parsers
       chapter-operations.ts      # Chapter list mutations
+      exporters.ts               # Export formatters: ffmetadata (ffmpeg), mkvmerge XML
   styles/
     global.css                   # CSS variables (design tokens), dark mode
 public/                          # Static assets

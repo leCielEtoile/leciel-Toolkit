@@ -10,6 +10,7 @@
     chaptersToString, stringToChapters, shiftChapterTimes,
     formatChapters, sortChaptersByTime, isValidTimeFormat
   } from '@/lib/chapter/chapter-operations'
+  import { chaptersToFfmetadata, chaptersToMkvXml } from '@/lib/chapter/exporters'
 
   // ---- state ----
   let editorText = $state('')
@@ -86,6 +87,20 @@
     if (!editorText.trim()) { toast.notify('ダウンロードする内容が空です', 'error'); return }
     triggerDownload(new Blob([editorText], { type: 'text/plain' }), 'youtube-chapters.txt')
     toast.notify('チャプターファイルをダウンロードしました')
+  }
+
+  function handleDownloadFfmetadata() {
+    if (chapters.length === 0) { toast.notify('エクスポートするチャプターがありません', 'error'); return }
+    const content = chaptersToFfmetadata(chapters)
+    triggerDownload(new Blob([content], { type: 'text/plain' }), 'chapters.ffmetadata')
+    toast.notify('ffmetadata ファイルをダウンロードしました')
+  }
+
+  function handleDownloadMkvXml() {
+    if (chapters.length === 0) { toast.notify('エクスポートするチャプターがありません', 'error'); return }
+    const content = chaptersToMkvXml(chapters)
+    triggerDownload(new Blob([content], { type: 'application/xml' }), 'chapters.xml')
+    toast.notify('mkvmerge XML ファイルをダウンロードしました')
   }
 
   async function handleCopy() {
@@ -285,6 +300,20 @@
         class="btn-outlined px-3 py-2"
       >
         <i class="fas fa-copy"></i> クリップボードにコピー
+      </button>
+      <button
+        onclick={handleDownloadFfmetadata}
+        title="ffmpeg 用 ffmetadata ファイルとしてダウンロード"
+        class="btn-outlined px-3 py-2"
+      >
+        <i class="fas fa-file-code"></i> ffmetadata 保存
+      </button>
+      <button
+        onclick={handleDownloadMkvXml}
+        title="mkvmerge 用 XML ファイルとしてダウンロード"
+        class="btn-outlined px-3 py-2"
+      >
+        <i class="fas fa-file-code"></i> mkvmerge XML 保存
       </button>
     </div>
   </section>
