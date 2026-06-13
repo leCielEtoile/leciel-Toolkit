@@ -8,7 +8,7 @@
   } from '@/lib/chapter/parsers'
   import {
     chaptersToString, stringToChapters, shiftChapterTimes,
-    formatChapters, sortChaptersByTime, isValidTimeFormat
+    formatChapters, sortChaptersByTime, normalizeTime
   } from '@/lib/chapter/chapter-operations'
   import { chaptersToFfmetadata, chaptersToMkvXml } from '@/lib/chapter/exporters'
 
@@ -92,7 +92,7 @@
   function handleDownloadFfmetadata() {
     if (chapters.length === 0) { toast.notify('エクスポートするチャプターがありません', 'error'); return }
     const content = chaptersToFfmetadata(chapters)
-    triggerDownload(new Blob([content], { type: 'text/plain' }), 'chapters.ffmetadata')
+    triggerDownload(new Blob([content], { type: 'text/plain' }), 'chapters.txt')
     toast.notify('ffmetadata ファイルをダウンロードしました')
   }
 
@@ -118,8 +118,9 @@
 
   function saveAdd() {
     if (!formTime || !formName) { toast.notify('時間とタイトルを入力してください', 'error'); return }
-    if (!isValidTimeFormat(formTime)) { toast.notify('時間は00:00:00の形式で入力してください', 'error'); return }
-    editorText = chaptersToString(sortChaptersByTime([...chapters, { time: formTime, name: formName }]))
+    const normalized = normalizeTime(formTime)
+    if (!normalized) { toast.notify('時間は HH:MM:SS または MM:SS の形式で入力してください', 'error'); return }
+    editorText = chaptersToString(sortChaptersByTime([...chapters, { time: normalized, name: formName }]))
     addModal = false
     toast.notify('チャプターを追加しました')
   }
@@ -134,9 +135,10 @@
 
   function saveEdit() {
     if (!formTime || !formName) { toast.notify('時間とタイトルを入力してください', 'error'); return }
-    if (!isValidTimeFormat(formTime)) { toast.notify('時間は00:00:00の形式で入力してください', 'error'); return }
+    const normalized = normalizeTime(formTime)
+    if (!normalized) { toast.notify('時間は HH:MM:SS または MM:SS の形式で入力してください', 'error'); return }
     const updated = [...chapters]
-    updated[editIndex] = { time: formTime, name: formName }
+    updated[editIndex] = { time: normalized, name: formName }
     editorText = chaptersToString(sortChaptersByTime(updated))
     editModal = false
     toast.notify('チャプターを更新しました')
@@ -359,7 +361,7 @@
       <h3 class="text-base font-semibold mb-4 text-[var(--text)]">チャプターを追加</h3>
       <div class="space-y-3">
         <div>
-          <label class="block text-xs font-medium text-[var(--text-muted)] mb-1">時間 (HH:MM:SS)</label>
+          <label class="block text-xs font-medium text-[var(--text-muted)] mb-1">時間 (HH:MM:SS / MM:SS)</label>
           <input
             bind:value={formTime}
             type="text"
@@ -404,7 +406,7 @@
       <h3 class="text-base font-semibold mb-4 text-[var(--text)]">チャプターを編集</h3>
       <div class="space-y-3">
         <div>
-          <label class="block text-xs font-medium text-[var(--text-muted)] mb-1">時間 (HH:MM:SS)</label>
+          <label class="block text-xs font-medium text-[var(--text-muted)] mb-1">時間 (HH:MM:SS / MM:SS)</label>
           <input
             bind:value={formTime}
             type="text"

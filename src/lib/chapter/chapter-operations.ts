@@ -4,14 +4,33 @@ export function chaptersToString(chapters: Chapter[]): string {
   return chapters.map((c) => `${c.time} ${c.name}`).join('\n')
 }
 
+// H:MM:SS / HH:MM:SS → HH:MM:SS、M:SS / MM:SS → 00:MM:SS に正規化。
+// 不正な入力は null を返す。
+export function normalizeTime(timeStr: string): string | null {
+  const parts = timeStr.trim().split(':').map((p) => p.trim())
+  if (parts.length === 3) {
+    const [h, m, s] = parts.map(Number)
+    if ([h, m, s].some(isNaN) || m >= 60 || s >= 60) return null
+    return [String(h).padStart(2, '0'), String(m).padStart(2, '0'), String(s).padStart(2, '0')].join(':')
+  }
+  if (parts.length === 2) {
+    const [m, s] = parts.map(Number)
+    if ([m, s].some(isNaN) || s >= 60) return null
+    return ['00', String(m).padStart(2, '0'), String(s).padStart(2, '0')].join(':')
+  }
+  return null
+}
+
 export function stringToChapters(str: string): Chapter[] {
   if (!str) return []
   return str
     .split('\n')
     .filter((line) => line.trim())
     .flatMap((line) => {
-      const match = line.match(/^(\d{2}:\d{2}:\d{2})\s+(.+)$/)
-      return match ? [{ time: match[1], name: match[2] }] : []
+      const match = line.match(/^(\d{1,2}(?::\d{2}){1,2})\s+(.+)$/)
+      if (!match) return []
+      const time = normalizeTime(match[1])
+      return time ? [{ time, name: match[2] }] : []
     })
 }
 
@@ -51,5 +70,5 @@ export function timeToSeconds(timeStr: string): number {
 }
 
 export function isValidTimeFormat(timeStr: string): boolean {
-  return /^\d{2}:\d{2}:\d{2}$/.test(timeStr)
+  return normalizeTime(timeStr) !== null
 }
