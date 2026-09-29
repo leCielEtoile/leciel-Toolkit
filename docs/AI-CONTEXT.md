@@ -65,7 +65,7 @@ src/
       client-processor.ts        # EXIF/IPTC/XMP strip logic
     chapter/
       parsers.ts                 # EDL / CSV / TXT / plain(「時刻 タイトル」) marker parsers。時刻は H:MM:SS / MM:SS / M:SS の省略形も可
-      chapter-operations.ts      # Chapter list mutations。normalizeTime で時刻を HH:MM:SS に正規化(内部表現)、toShortTime / chaptersToString で YouTube 向け省略形(M:SS / H:MM:SS)に出力
+      chapter-operations.ts      # Chapter list mutations。normalizeTime で時刻を HH:MM:SS に正規化(内部表現)、chaptersToString(chapters, TimeFormat) でテキスト出力(hms=HH:MM:SS固定 / short=自動短縮 / aligned=最長に桁数を揃える)。選択は localStorage の chapterTimeFormat に保存、既定 hms
       exporters.ts               # Export formatters: ffmetadata (ffmpeg, 保存名 chapters.txt), mkvmerge XML
   styles/
     global.css                   # CSS variables (design tokens), dark mode

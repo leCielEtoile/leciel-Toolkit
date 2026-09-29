@@ -8,7 +8,8 @@
   } from '@/lib/chapter/parsers'
   import {
     chaptersToString, stringToChapters, shiftChapterTimes,
-    formatChapters, sortChaptersByTime, normalizeTime
+    formatChapters, sortChaptersByTime, normalizeTime,
+    TIME_FORMAT_LABELS, type TimeFormat
   } from '@/lib/chapter/chapter-operations'
   import { chaptersToFfmetadata, chaptersToMkvXml } from '@/lib/chapter/exporters'
 
@@ -24,6 +25,23 @@
   let editIndex = $state(-1)
   let formTime  = $state('')
   let formName  = $state('')
+
+  // 出力時刻形式（選択はブラウザに保存）
+  const TIME_FORMAT_KEY = 'chapterTimeFormat'
+  function loadTimeFormat(): TimeFormat {
+    try {
+      const v = localStorage.getItem(TIME_FORMAT_KEY)
+      return v && v in TIME_FORMAT_LABELS ? (v as TimeFormat) : 'hms'
+    } catch { return 'hms' }
+  }
+  let timeFormat = $state<TimeFormat>(loadTimeFormat())
+
+  function toText(list: Chapter[]) { return chaptersToString(list, timeFormat) }
+
+  function handleTimeFormatChange() {
+    try { localStorage.setItem(TIME_FORMAT_KEY, timeFormat) } catch {}
+    if (editorText.trim()) editorText = toText(chapters)
+  }
 
   // チャプター一覧（editorText から導出）
   let chapters = $derived(stringToChapters(editorText))
@@ -46,7 +64,7 @@
     reader.onload = (e) => {
       try {
         const result = parseContent(e.target!.result as string, file.name)
-        editorText = chaptersToString(result)
+        editorText = toText(result)
         toast.notify(`ファイルを変換しました（形式: ${getFormatDisplayName(lastFormat as any)}）`)
       } catch (err) {
         editorText = ''
@@ -61,7 +79,7 @@
   function convertPasted() {
     try {
       const result = parseContent(pasteText)
-      editorText = chaptersToString(result)
+      editorText = toText(result)
       toast.notify(`コピペ入力を変換しました（形式: ${getFormatDisplayName(lastFormat as any)}）`)
     } catch (err) {
       editorText = ''
@@ -72,14 +90,14 @@
   // ---- toolbar actions ----
   function handleShift() {
     if (chapters.length === 0) { toast.notify('補正するチャプターがありません', 'error'); return }
-    editorText = chaptersToString(shiftChapterTimes(chapters, !isShifted))
+    editorText = toText(shiftChapterTimes(chapters, !isShifted))
     isShifted = !isShifted
     toast.notify(isShifted ? 'チャプター時間を1時間戻しました' : 'チャプター時間を元に戻しました')
   }
 
   function handleFormat() {
     if (chapters.length === 0) { toast.notify('整形するチャプターがありません', 'error'); return }
-    editorText = chaptersToString(formatChapters(chapters))
+    editorText = toText(formatChapters(chapters))
     toast.notify('チャプターを整形しました')
   }
 
@@ -120,7 +138,7 @@
     if (!formTime || !formName) { toast.notify('時間とタイトルを入力してください', 'error'); return }
     const normalized = normalizeTime(formTime)
     if (!normalized) { toast.notify('時間は HH:MM:SS または MM:SS の形式で入力してください', 'error'); return }
-    editorText = chaptersToString(sortChaptersByTime([...chapters, { time: normalized, name: formName }]))
+    editorText = toText(sortChaptersByTime([...chapters, { time: normalized, name: formName }]))
     addModal = false
     toast.notify('チャプターを追加しました')
   }
@@ -139,7 +157,7 @@
     if (!normalized) { toast.notify('時間は HH:MM:SS または MM:SS の形式で入力してください', 'error'); return }
     const updated = [...chapters]
     updated[editIndex] = { time: normalized, name: formName }
-    editorText = chaptersToString(sortChaptersByTime(updated))
+    editorText = toText(sortChaptersByTime(updated))
     editModal = false
     toast.notify('チャプターを更新しました')
   }
@@ -150,7 +168,7 @@
     if (!confirm(`チャプター「${c.time} ${c.name}」を削除しますか？`)) return
     const updated = [...chapters]
     updated.splice(idx, 1)
-    editorText = chaptersToString(updated)
+    editorText = toText(updated)
     toast.notify('チャプターを削除しました')
   }
 
@@ -273,7 +291,19 @@
     </div>
 
     <!-- ツールバー -->
-    <div class="mt-3 flex flex-wrap gap-2">
+    <div class="mt-3 flex flex-wrap items-center gap-2">
+      <label class="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+        出力形式
+        <select
+          bind:value={timeFormat}
+          onchange={handleTimeFormatChange}
+          class="rounded-xl border border-[var(--outline-variant)] bg-[var(--background)] text-[var(--text)] px-3 py-2 text-sm focus:outline-none focus:border-[var(--border-focus)] cursor-pointer"
+        >
+          {#each Object.entries(TIME_FORMAT_LABELS) as [key, label]}
+            <option value={key}>{label}</option>
+          {/each}
+        </select>
+      </label>
       <button
         onclick={handleShift}
         title="最初のチャプターを00:00:00にします（Ctrl+T）"

@@ -1,18 +1,52 @@
 import type { Chapter } from './parsers'
 
-// HH:MM:SS → YouTube 向けの省略形。1時間未満は M:SS、1時間以上は H:MM:SS。
-// 想定外の形式はそのまま返す。
-export function toShortTime(time: string): string {
-  const parts = time.split(':').map(Number)
-  if (parts.length !== 3 || parts.some(isNaN)) return time
-  const [h, m, s] = parts
-  const ss = String(s).padStart(2, '0')
-  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`
+// テキスト出力時の時刻形式。内部の時刻は常に HH:MM:SS。
+//   hms:     HH:MM:SS 固定（00:03:45）
+//   short:   自動短縮。1時間未満は M:SS、1時間以上は H:MM:SS（3:45 / 1:02:30）
+//   aligned: 自動短縮しつつ、最長の行に桁数を揃える（03:45 / 0:03:45 など）
+export type TimeFormat = 'hms' | 'short' | 'aligned'
+
+export const TIME_FORMAT_LABELS: Record<TimeFormat, string> = {
+  hms: 'HH:MM:SS 固定',
+  short: '自動短縮',
+  aligned: '自動短縮（最長に桁数を揃える）',
 }
 
-// チャプター内部の時刻は HH:MM:SS のまま保持し、テキスト出力時のみ省略形にする。
-export function chaptersToString(chapters: Chapter[]): string {
-  return chapters.map((c) => `${toShortTime(c.time)} ${c.name}`).join('\n')
+function toParts(time: string): [number, number, number] | null {
+  const parts = time.split(':').map(Number)
+  return parts.length === 3 && !parts.some(isNaN) ? [parts[0], parts[1], parts[2]] : null
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0')
+
+export function toShortTime(time: string): string {
+  const p = toParts(time)
+  if (!p) return time
+  const [h, m, s] = p
+  return h > 0 ? `${h}:${pad2(m)}:${pad2(s)}` : `${m}:${pad2(s)}`
+}
+
+export function chaptersToString(chapters: Chapter[], format: TimeFormat = 'hms'): string {
+  if (format === 'hms') return chapters.map((c) => `${c.time} ${c.name}`).join('\n')
+  if (format === 'short') return chapters.map((c) => `${toShortTime(c.time)} ${c.name}`).join('\n')
+
+  // aligned: 最長の行に合わせる。時間あり→ H:MM:SS（時は最大桁に0埋め）、なし→ 分が2桁ある場合 MM:SS、なければ M:SS
+  const all = chapters.map((c) => toParts(c.time))
+  const valid = all.filter((p): p is [number, number, number] => p !== null)
+  const maxH = Math.max(0, ...valid.map((p) => p[0]))
+  const maxM = Math.max(0, ...valid.map((p) => p[1]))
+  const hDigits = String(maxH).length
+  return chapters
+    .map((c, i) => {
+      const p = all[i]
+      if (!p) return `${c.time} ${c.name}`
+      const [h, m, s] = p
+      const time = maxH > 0
+        ? `${String(h).padStart(hDigits, '0')}:${pad2(m)}:${pad2(s)}`
+        : `${maxM >= 10 ? pad2(m) : String(m)}:${pad2(s)}`
+      return `${time} ${c.name}`
+    })
+    .join('\n')
 }
 
 // H:MM:SS / HH:MM:SS → HH:MM:SS、M:SS / MM:SS → 00:MM:SS に正規化。
