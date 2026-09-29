@@ -1,12 +1,28 @@
+import { normalizeTime } from './chapter-operations'
+
 export interface Chapter {
   time: string
   name: string
 }
 
-export type FormatKey = 'davinci' | 'premiereedl' | 'premieretxt' | 'premierecsv'
+export type FormatKey = 'davinci' | 'premiereedl' | 'premieretxt' | 'premierecsv' | 'plain'
+
+// H:MM:SS / HH:MM:SS / M:SS / MM:SS（末尾のフレーム :FF は許容して無視）
+const FLEX_TIME = /(?<!\d)(\d{1,2}(?::\d{2}){1,3})(?!\d)/
+
+function extractTime(text: string): string | null {
+  const m = text.match(FLEX_TIME)
+  if (!m) return null
+  const parts = m[1].split(':')
+  // 4要素 (HH:MM:SS:FF) はフレームを除去
+  return normalizeTime(parts.slice(0, 3).join(':'))
+}
 
 export function detectFileFormat(content: string, filename = ''): FormatKey | null {
   if (!content || typeof content !== 'string') return null
+
+  // 先頭行が「時刻 タイトル」形式（拡張子より優先）
+  if (/^\s*\uFEFF?\d{1,2}(?::\d{2}){1,2}\s+\S/.test(content)) return 'plain'
 
   if (filename) {
     const ext = filename.split('.').pop()?.toLowerCase()
@@ -21,7 +37,7 @@ export function detectFileFormat(content: string, filename = ''): FormatKey | nu
     (content.includes('シーケンス') && /\d{2}:\d{2}:\d{2}:\d{2}/.test(content) && /\t/.test(content))
   ) return 'premieretxt'
   if (/^\s*\uFEFF?マーカー/.test(content) || /^\s*\uFEFF?Marker/.test(content) || /^\s*\uFEFF?(Name|名前)/.test(content)) return 'premierecsv'
-  if (/\d{2}:\d{2}:\d{2}(:\d{2})?/.test(content) && /[,\t]/.test(content)) {
+  if (FLEX_TIME.test(content) && /[,\t]/.test(content)) {
     return content.includes(',') ? 'premierecsv' : 'premieretxt'
   }
 
@@ -83,7 +99,7 @@ export function parsePremiereTxtMarkers(content: string): Chapter[] {
   const chapters: Chapter[] = []
 
   let startIndex = 0
-  if (lines[0] && (lines[0].includes('アセット名') || lines[0].includes('インポイント') || lines[0].includes('説明') || !lines[0].match(/\d{2}:\d{2}:\d{2}/))) {
+  if (lines[0] && (lines[0].includes('アセット名') || lines[0].includes('インポイント') || lines[0].includes('説明') || !FLEX_TIME.test(lines[0]))) {
     startIndex = 1
   }
 
@@ -96,8 +112,8 @@ export function parsePremiereTxtMarkers(content: string): Chapter[] {
       const timeMatch = parts[1].trim().match(/(\d{2}:\d{2}:\d{2}):\d{2}/)
       if (timeMatch) chapters.push({ time: timeMatch[1], name: parts[2].trim() })
     } else if (parts.length === 2) {
-      const timeMatch = parts[0].trim().match(/(\d{2}:\d{2}:\d{2})(:\d{2})?/)
-      if (timeMatch) chapters.push({ time: timeMatch[1], name: parts[1].trim() })
+      const time = extractTime(parts[0].trim())
+      if (time) chapters.push({ time, name: parts[1].trim() })
     }
   }
 
@@ -134,10 +150,8 @@ export function parsePremiereCSVMarkers(content: string): Chapter[] {
     const fields = line.split(/\t|,/)
     if (fields.length <= inPointIndex) continue
 
-    const timeMatch = fields[inPointIndex]?.trim().match(/(\d{2}):(\d{2}):(\d{2})(?::(\d{2}))?/)
-    if (!timeMatch) continue
-
-    const timeCode = `${timeMatch[1]}:${timeMatch[2]}:${timeMatch[3]}`
+    const timeCode = extractTime(fields[inPointIndex]?.trim() ?? '')
+    if (!timeCode) continue
     let title = ''
 
     if (markerNameIndex >= 0 && fields[markerNameIndex]?.trim()) {
@@ -153,12 +167,26 @@ export function parsePremiereCSVMarkers(content: string): Chapter[] {
   return chapters
 }
 
+// 「時刻 タイトル」の1行1チャプター形式（YouTube チャプターと同形式）
+export function parsePlainChapters(content: string): Chapter[] {
+  if (!content) return []
+  return content
+    .replace(/^\uFEFF/, '')
+    .split(/\r?\n/)
+    .flatMap((line) => {
+      const m = line.trim().match(/^(\d{1,2}(?::\d{2}){1,2})\s+(.+)$/)
+      const time = m ? normalizeTime(m[1]) : null
+      return m && time ? [{ time, name: m[2].trim() }] : []
+    })
+}
+
 export function getFormatDisplayName(format: FormatKey | null): string {
   switch (format) {
     case 'davinci':      return 'DaVinci Resolve EDL'
     case 'premiereedl':  return 'Premiere Pro EDL'
     case 'premieretxt':  return 'Premiere Pro マーカーテキスト'
     case 'premierecsv':  return 'Premiere Pro マーカーCSV'
+    case 'plain':        return '時刻 + タイトル形式'
     default:             return '不明'
   }
 }
@@ -168,4 +196,5 @@ export const PARSERS: Record<FormatKey, (content: string) => Chapter[]> = {
   premiereedl: parsePremiereEDL,
   premieretxt: parsePremiereTxtMarkers,
   premierecsv: parsePremiereCSVMarkers,
+  plain:       parsePlainChapters,
 }
