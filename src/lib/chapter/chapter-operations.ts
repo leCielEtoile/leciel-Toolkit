@@ -1,7 +1,18 @@
 import type { Chapter } from './parsers'
 
+// HH:MM:SS → YouTube 向けの省略形。1時間未満は M:SS、1時間以上は H:MM:SS。
+// 想定外の形式はそのまま返す。
+export function toShortTime(time: string): string {
+  const parts = time.split(':').map(Number)
+  if (parts.length !== 3 || parts.some(isNaN)) return time
+  const [h, m, s] = parts
+  const ss = String(s).padStart(2, '0')
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`
+}
+
+// チャプター内部の時刻は HH:MM:SS のまま保持し、テキスト出力時のみ省略形にする。
 export function chaptersToString(chapters: Chapter[]): string {
-  return chapters.map((c) => `${c.time} ${c.name}`).join('\n')
+  return chapters.map((c) => `${toShortTime(c.time)} ${c.name}`).join('\n')
 }
 
 // H:MM:SS / HH:MM:SS → HH:MM:SS、M:SS / MM:SS → 00:MM:SS に正規化。
